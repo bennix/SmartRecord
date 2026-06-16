@@ -10,10 +10,12 @@ final class MouseEventBuffer {
     private(set) var samples: [RawSample] = []
 
     init(screenWidth: Double, screenHeight: Double) {
+        precondition(screenWidth > 0 && screenHeight > 0, "screen dimensions must be positive")
         self.w = screenWidth
         self.h = screenHeight
     }
 
+    /// Not thread-safe: must be called from the run-loop thread that owns the event tap.
     func record(kind: MouseEventKind, time: Double, px: Double, py: Double) {
         let nx = min(max(px / w, 0), 1)
         let ny = min(max(py / h, 0), 1)
