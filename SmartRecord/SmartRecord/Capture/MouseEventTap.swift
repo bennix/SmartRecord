@@ -12,9 +12,12 @@ final class MouseEventTap {
         self.clock = clock
     }
 
+    deinit { stop() }
+
     /// Returns false if Accessibility permission was not granted (tap creation fails).
     @discardableResult
     func start() -> Bool {
+        guard tap == nil else { return true }
         let mask = (1 << CGEventType.leftMouseDown.rawValue)
                  | (1 << CGEventType.mouseMoved.rawValue)
                  | (1 << CGEventType.leftMouseDragged.rawValue)
@@ -52,6 +55,10 @@ final class MouseEventTap {
     }
 
     private func handle(type: CGEventType, event: CGEvent) {
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+            return
+        }
         let ticks = mach_absolute_time()
         let t = clock.elapsed(atTicks: ticks)
         let loc = event.location   // global coords, top-left origin
