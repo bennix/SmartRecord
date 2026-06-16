@@ -116,7 +116,7 @@ struct ContentView: View {
                 Text("最近录制")
                     .font(.title3.weight(.semibold))
                 Spacer()
-                Text("点击项目即可播放 screen.mov")
+                Text("点击项目即可播放 final.mp4 / screen.mov")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -139,6 +139,16 @@ struct ContentView: View {
                                     coordinator.open(project: project)
                                 } label: {
                                     Label("播放录制", systemImage: "play.rectangle")
+                                }
+                                Button {
+                                    coordinator.regenerateVideo(for: project, context: context)
+                                } label: {
+                                    Label("重新生成视频", systemImage: "arrow.triangle.2.circlepath")
+                                }
+                                Button {
+                                    coordinator.regenerateSubtitles(for: project, context: context)
+                                } label: {
+                                    Label("重新生成字幕", systemImage: "captions.bubble")
                                 }
                                 Button {
                                     coordinator.reveal(project: project)
@@ -180,7 +190,9 @@ struct ContentView: View {
     }
 
     private func projectRow(_ project: Project) -> some View {
-        HStack(spacing: 10) {
+        let assets = projectAssets(project)
+
+        return HStack(spacing: 10) {
             Button {
                 coordinator.open(project: project)
             } label: {
@@ -200,7 +212,13 @@ struct ContentView: View {
                         }
 
                         HStack(spacing: 8) {
-                            tag(project.status.rawValue, icon: "circle.dashed")
+                            tag(statusLabel(project.status), icon: statusIcon(project.status))
+                            if assets.hasFinalVideo {
+                                tag("MP4", icon: "checkmark.seal")
+                            }
+                            if assets.hasFinalVTT {
+                                tag("VTT", icon: "captions.bubble")
+                            }
                             tag("\(project.clickEvents.count) 点击", icon: "cursorarrow.click")
                             tag("\(project.cursorSamples.count) 轨迹", icon: "point.topleft.down.curvedto.point.bottomright.up")
                             if !project.warnings.isEmpty {
@@ -221,6 +239,20 @@ struct ContentView: View {
                 Image(systemName: "folder")
             }
             .help("在 Finder 中显示")
+
+            Button {
+                coordinator.regenerateVideo(for: project, context: context)
+            } label: {
+                Image(systemName: "arrow.triangle.2.circlepath")
+            }
+            .help("重新生成视频")
+
+            Button {
+                coordinator.regenerateSubtitles(for: project, context: context)
+            } label: {
+                Image(systemName: "captions.bubble")
+            }
+            .help("重新生成字幕")
 
             Button(role: .destructive) {
                 delete(project)
@@ -290,6 +322,52 @@ struct ContentView: View {
         return String(format: "%d:%02d", minutes, seconds)
     }
 
+    private func projectAssets(_ project: Project) -> ProjectAssetPresence {
+        guard let bundle = coordinator.recordingBundle(for: project) else {
+            return ProjectAssetPresence(hasFinalVideo: false, hasFinalVTT: false)
+        }
+        return ProjectAssetPresence(
+            hasFinalVideo: FileManager.default.fileExists(atPath: bundle.finalVideo.path),
+            hasFinalVTT: FileManager.default.fileExists(atPath: bundle.finalVTT.path)
+        )
+    }
+
+    private func statusLabel(_ status: ProjectStatus) -> String {
+        switch status {
+        case .recording:
+            return "录制中"
+        case .recorded:
+            return "已保存"
+        case .renderingVideo:
+            return "生成视频"
+        case .transcribing:
+            return "生成字幕"
+        case .completed:
+            return "完成"
+        case .videoFailed:
+            return "视频失败"
+        case .subtitleFailed:
+            return "字幕失败"
+        }
+    }
+
+    private func statusIcon(_ status: ProjectStatus) -> String {
+        switch status {
+        case .recording:
+            return "record.circle"
+        case .recorded:
+            return "tray.and.arrow.down"
+        case .renderingVideo:
+            return "film"
+        case .transcribing:
+            return "captions.bubble"
+        case .completed:
+            return "checkmark.circle"
+        case .videoFailed, .subtitleFailed:
+            return "exclamationmark.triangle"
+        }
+    }
+
     private func delete(_ project: Project) {
         if let bundle = coordinator.recordingBundle(for: project) {
             try? FileManager.default.removeItem(at: bundle.directory)
@@ -297,4 +375,9 @@ struct ContentView: View {
         context.delete(project)
         try? context.save()
     }
+}
+
+private struct ProjectAssetPresence {
+    let hasFinalVideo: Bool
+    let hasFinalVTT: Bool
 }

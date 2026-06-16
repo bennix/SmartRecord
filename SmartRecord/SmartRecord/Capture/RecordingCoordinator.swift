@@ -16,6 +16,7 @@ final class RecordingCoordinator {
     var recordingStartedAt: Date?
 
     private let assetStore: ProjectAssetStore
+    private let postProcessor = PostProcessingCoordinator()
     private var activeBundle: ProjectAssetBundle?
     private var recorder: ScreenRecorder?
     private var tap: MouseEventTap?
@@ -143,6 +144,9 @@ final class RecordingCoordinator {
             lastEventCount = project.clickEvents.count + project.cursorSamples.count
             lastProjectDirectory = result.bundle.directory
             statusMessage = warnings.isEmpty ? "原始素材已保存" : "原始素材已保存，有警告"
+            Task { @MainActor in
+                await postProcessor.process(project: project, context: context)
+            }
         } catch {
             failureMessage = "项目保存失败：\(error.localizedDescription)"
             statusMessage = "录制文件已生成，项目保存失败"
@@ -168,7 +172,22 @@ final class RecordingCoordinator {
 
     func open(project: Project) {
         guard let bundle = recordingBundle(for: project) else { return }
-        NSWorkspace.shared.open(bundle.screenVideo)
+        let url = FileManager.default.fileExists(atPath: bundle.finalVideo.path)
+            ? bundle.finalVideo
+            : bundle.screenVideo
+        NSWorkspace.shared.open(url)
+    }
+
+    func regenerateVideo(for project: Project, context: ModelContext) {
+        Task { @MainActor in
+            await postProcessor.renderFinalVideo(project: project, context: context)
+        }
+    }
+
+    func regenerateSubtitles(for project: Project, context: ModelContext) {
+        Task { @MainActor in
+            await postProcessor.transcribeSubtitles(project: project, context: context)
+        }
     }
 
     func openScreenRecordingSettings() {

@@ -5,6 +5,8 @@ enum ProjectWarning: String, Codable, CaseIterable, Comparable, Hashable {
     case missingSystemAudio
     case missingAccessibilityPermission
     case whisperCommandNotInstalled
+    case whisperMediumModelMissing
+    case audioConverterNotInstalled
 
     static func < (lhs: ProjectWarning, rhs: ProjectWarning) -> Bool {
         lhs.rawValue < rhs.rawValue
