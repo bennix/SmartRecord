@@ -1,13 +1,22 @@
-import SwiftUI
+import AppKit
 import SwiftData
+import SwiftUI
 
 @MainActor
 @Observable
 final class RecordingCoordinator {
     var isRecording = false
+    var isStarting = false
     var lastEventCount = 0
     var permissionMissing = false
+    var screenRecordingPermissionMissing = false
+    var statusMessage = "准备录制"
+    var failureMessage: String?
+    var lastProjectDirectory: URL?
+    var recordingStartedAt: Date?
 
+    private let assetStore = ProjectAssetStore()
+    private var activeBundle: ProjectAssetBundle?
     private var recorder: ScreenRecorder?
     private var tap: MouseEventTap?
     private var buffer: MouseEventBuffer?
@@ -15,43 +24,193 @@ final class RecordingCoordinator {
     private var startDate = Date.now
 
     func startRecording() async {
-        let recorder = ScreenRecorder()
+        guard !isRecording, !isStarting else { return }
+
+        isStarting = true
+        failureMessage = nil
+        permissionMissing = false
+        screenRecordingPermissionMissing = false
+        statusMessage = "正在准备录制..."
+
+        let bundle: ProjectAssetBundle
         do {
-            _ = try await recorder.start()
+            bundle = try assetStore.createProjectBundle()
         } catch {
-            print("录制启动失败: \(error)")
+            failureMessage = "无法创建项目目录：\(error.localizedDescription)"
+            statusMessage = "录制启动失败"
+            isStarting = false
             return
         }
+
+        let recorder = ScreenRecorder()
+        do {
+            try await recorder.start(bundle: bundle)
+        } catch {
+            try? assetStore.removeProject(named: bundle.directoryName)
+            handleStartFailure(error)
+            isStarting = false
+            return
+        }
+
         let clock = RecordingClock(startTicks: mach_absolute_time())
-        // Use POINT size (event.location is in points), not the Retina pixelSize.
-        let buf = MouseEventBuffer(screenWidth: recorder.pointSize.width,
-                                   screenHeight: recorder.pointSize.height)
-        let tap = MouseEventTap(buffer: buf, clock: clock)
+        let buffer = MouseEventBuffer(
+            screenWidth: recorder.pointSize.width,
+            screenHeight: recorder.pointSize.height
+        )
+        let tap = MouseEventTap(buffer: buffer, clock: clock)
         permissionMissing = !tap.start()
 
+        activeBundle = bundle
         self.recorder = recorder
-        self.clock = clock
-        self.buffer = buf
         self.tap = tap
-        self.startDate = .now
+        self.buffer = buffer
+        self.clock = clock
+        startDate = .now
+        recordingStartedAt = startDate
+        lastProjectDirectory = bundle.directory
         isRecording = true
+        isStarting = false
+        statusMessage = permissionMissing ? "正在录制，鼠标事件权限缺失" : "正在录制"
     }
 
     func stopRecording(context: ModelContext) async {
-        tap?.stop()
-        try? await recorder?.stop()
-        isRecording = false
+        guard isRecording || isStarting else { return }
 
-        guard let buf = buffer, let recorder, let url = recorder.outputURL else { return }
-        let project = Project(createdAt: startDate,
-                              duration: Date.now.timeIntervalSince(startDate),
-                              rawVideoFilename: url.lastPathComponent)
-        project.clickEvents = buf.clicks.map { ClickEvent(time: $0.time, nx: $0.nx, ny: $0.ny) }
-        project.cursorSamples = buf.samples.map {
+        tap?.stop()
+        statusMessage = "正在保存原始素材..."
+
+        let result: ScreenRecordingResult
+        do {
+            guard let recorder else {
+                throw ScreenRecorderError.writerFailed("录制器未启动")
+            }
+            result = try await recorder.stop()
+        } catch {
+            handleStopFailure(error)
+            if let activeBundle {
+                try? assetStore.removeProject(named: activeBundle.directoryName)
+            }
+            isRecording = false
+            isStarting = false
+            recordingStartedAt = nil
+            cleanupCaptureState()
+            return
+        }
+
+        isRecording = false
+        isStarting = false
+        recordingStartedAt = nil
+
+        guard let buffer else {
+            failureMessage = "鼠标事件缓存丢失"
+            statusMessage = "录制保存失败"
+            cleanupCaptureState()
+            return
+        }
+
+        let project = Project(
+            createdAt: startDate,
+            duration: Date.now.timeIntervalSince(startDate),
+            rawVideoFilename: result.bundle.screenVideo.lastPathComponent,
+            assetDirectoryName: result.bundle.directoryName,
+            status: .recorded
+        )
+        project.clickEvents = buffer.clicks.map { ClickEvent(time: $0.time, nx: $0.nx, ny: $0.ny) }
+        project.cursorSamples = buffer.samples.map {
             CursorSample(time: $0.time, nx: $0.nx, ny: $0.ny, dragging: $0.dragging)
         }
+
+        var warnings: [ProjectWarning] = []
+        if permissionMissing {
+            warnings.append(.missingAccessibilityPermission)
+        }
+        if !result.capturedSystemAudio {
+            warnings.append(.missingSystemAudio)
+        }
+        if !result.capturedMicrophoneAudio {
+            warnings.append(.missingMicrophoneAudio)
+        }
+        project.setWarnings(warnings)
+
         context.insert(project)
-        try? context.save()
-        lastEventCount = project.clickEvents.count + project.cursorSamples.count
+
+        do {
+            try context.save()
+            lastEventCount = project.clickEvents.count + project.cursorSamples.count
+            lastProjectDirectory = result.bundle.directory
+            statusMessage = warnings.isEmpty ? "原始素材已保存" : "原始素材已保存，有警告"
+        } catch {
+            failureMessage = "项目保存失败：\(error.localizedDescription)"
+            statusMessage = "录制文件已生成，项目保存失败"
+        }
+
+        cleanupCaptureState()
+    }
+
+    func recordingBundle(for project: Project) -> ProjectAssetBundle {
+        if let bundle = try? assetStore.bundle(named: project.assetDirectoryName) {
+            return bundle
+        }
+
+        let directoryName = project.assetDirectoryName.isEmpty ? project.rawVideoFilename : project.assetDirectoryName
+        let directory = assetStore.rootDirectory.appendingPathComponent(directoryName, isDirectory: true)
+        return ProjectAssetBundle(directoryName: directoryName, directory: directory)
+    }
+
+    func revealLastProject() {
+        guard let lastProjectDirectory else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([lastProjectDirectory])
+    }
+
+    func reveal(project: Project) {
+        NSWorkspace.shared.activateFileViewerSelecting([recordingBundle(for: project).directory])
+    }
+
+    func openScreenRecordingSettings() {
+        openPrivacySettings(anchor: "Privacy_ScreenCapture")
+    }
+
+    func openAccessibilitySettings() {
+        openPrivacySettings(anchor: "Privacy_Accessibility")
+    }
+
+    private func handleStartFailure(_ error: Error) {
+        let nsError = error as NSError
+        if error is ScreenRecorderError || isScreenCapturePermissionError(nsError) {
+            screenRecordingPermissionMissing = true
+        }
+
+        let recovery = nsError.localizedRecoverySuggestion
+        if let recovery, !recovery.isEmpty {
+            failureMessage = "\(error.localizedDescription)\n\(recovery)"
+        } else {
+            failureMessage = "录制启动失败：\(error.localizedDescription)"
+        }
+        statusMessage = screenRecordingPermissionMissing ? "需要屏幕录制权限" : "录制启动失败"
+    }
+
+    private func handleStopFailure(_ error: Error) {
+        failureMessage = error.localizedDescription
+        statusMessage = "录制保存失败"
+        lastProjectDirectory = nil
+    }
+
+    private func cleanupCaptureState() {
+        activeBundle = nil
+        recorder = nil
+        tap = nil
+        buffer = nil
+        clock = nil
+    }
+
+    private func openPrivacySettings(anchor: String) {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)") else {
+            return
+        }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func isScreenCapturePermissionError(_ error: NSError) -> Bool {
+        error.domain == "com.apple.ScreenCaptureKit.SCStreamErrorDomain" && error.code == -3801
     }
 }

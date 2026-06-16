@@ -2,132 +2,288 @@
 //  ScreenRecorder.swift
 //  SmartRecord
 //
-//  Captures the main display + system audio + microphone via ScreenCaptureKit
-//  and writes them to a .mov file (one video track + two audio tracks) using
-//  AVAssetWriter. Raw capture only — no zoom/cursor effects, no audio mixdown.
+//  Captures screen, system audio, and microphone audio into separate raw assets
+//  inside a project bundle.
 //
 
-import ScreenCaptureKit
+import AppKit
 import AVFoundation
+import CoreGraphics
+import ScreenCaptureKit
+
+enum ScreenRecorderError: LocalizedError {
+    case screenCapturePermissionDenied
+    case noDisplayAvailable
+    case noFramesCaptured
+    case writerFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .screenCapturePermissionDenied:
+            return "未获得屏幕录制权限。请在系统设置中允许 SmartRecord 录制屏幕，然后重新开始录制。"
+        case .noDisplayAvailable:
+            return "找不到可录制的显示器。"
+        case .noFramesCaptured:
+            return "录制时间太短，没有捕捉到可保存的视频帧。请至少录制 2 秒后再停止。"
+        case .writerFailed(let message):
+            return "录制文件写入失败：\(message)"
+        }
+    }
+
+    var recoverySuggestion: String? {
+        switch self {
+        case .screenCapturePermissionDenied:
+            return "打开 系统设置 > 隐私与安全性 > 屏幕录制，勾选 SmartRecord。若已勾选，请关闭后重新打开本应用。"
+        case .noDisplayAvailable, .noFramesCaptured, .writerFailed:
+            return nil
+        }
+    }
+}
+
+struct ScreenRecordingResult {
+    let bundle: ProjectAssetBundle
+    let pointSize: CGSize
+    let pixelSize: CGSize
+    let capturedSystemAudio: Bool
+    let capturedMicrophoneAudio: Bool
+}
 
 @MainActor
 final class ScreenRecorder: NSObject, SCStreamOutput {
     private var stream: SCStream?
-    private var writer: AVAssetWriter?
+    private var screenWriter: AVAssetWriter?
+    private var systemAudioWriter: AVAssetWriter?
+    private var microphoneWriter: AVAssetWriter?
     private var videoInput: AVAssetWriterInput?
     private var systemAudioInput: AVAssetWriterInput?
-    private var micAudioInput: AVAssetWriterInput?
-    private var sessionStarted = false
-    private(set) var outputURL: URL?
-    private(set) var pixelSize: CGSize = .zero
-    private(set) var pointSize: CGSize = .zero
+    private var microphoneInput: AVAssetWriterInput?
+    private var screenSessionStarted = false
+    private var systemAudioSessionStarted = false
+    private var microphoneSessionStarted = false
+    private var bundle: ProjectAssetBundle?
 
-    func start() async throws -> URL {
-        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        guard let display = content.displays.first else {
-            throw NSError(domain: "SmartRecord", code: 1, userInfo: [NSLocalizedDescriptionKey: "找不到主显示器"])
+    private(set) var pointSize: CGSize = .zero
+    private(set) var pixelSize: CGSize = .zero
+
+    func start(bundle: ProjectAssetBundle) async throws {
+        if !CGPreflightScreenCaptureAccess() {
+            guard CGRequestScreenCaptureAccess() else {
+                throw ScreenRecorderError.screenCapturePermissionDenied
+            }
         }
-        let myWindows = content.windows.filter {
+
+        let content: SCShareableContent
+        do {
+            content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        } catch {
+            if Self.isScreenCapturePermissionError(error) {
+                throw ScreenRecorderError.screenCapturePermissionDenied
+            }
+            throw error
+        }
+
+        guard let display = content.displays.first else {
+            throw ScreenRecorderError.noDisplayAvailable
+        }
+
+        let ownWindows = content.windows.filter {
             $0.owningApplication?.bundleIdentifier == Bundle.main.bundleIdentifier
         }
-        let filter = SCContentFilter(display: display, excludingWindows: myWindows)
+        let filter = SCContentFilter(display: display, excludingWindows: ownWindows)
 
         let config = SCStreamConfiguration()
-        config.width = display.width * 2
-        config.height = display.height * 2
+        config.width = Self.evenDimension(display.width)
+        config.height = Self.evenDimension(display.height)
         config.minimumFrameInterval = CMTime(value: 1, timescale: 60)
         config.pixelFormat = kCVPixelFormatType_32BGRA
         config.capturesAudio = true
         config.captureMicrophone = true
-        let size = CGSize(width: config.width, height: config.height)
-        pixelSize = size
-        pointSize = CGSize(width: display.width, height: display.height)
 
-        let url = Self.makeOutputURL()
-        outputURL = url
-        try setupWriter(url: url, size: size)
+        self.bundle = bundle
+        pixelSize = CGSize(width: config.width, height: config.height)
+        pointSize = NSScreen.main?.frame.size ?? CGSize(width: display.width, height: display.height)
+
+        try setupWriters(bundle: bundle, size: pixelSize)
 
         let stream = SCStream(filter: filter, configuration: config, delegate: nil)
-        try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: .global())
-        try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: .global())
-        try stream.addStreamOutput(self, type: .microphone, sampleHandlerQueue: .global())
-        self.stream = stream
-        try await stream.startCapture()
-        return url
-    }
-
-    func stop() async throws {
-        try await stream?.stopCapture()
-        videoInput?.markAsFinished()
-        systemAudioInput?.markAsFinished()
-        micAudioInput?.markAsFinished()
-        await writer?.finishWriting()
-        if let writer, writer.status == .failed {
-            throw writer.error ?? NSError(domain: "SmartRecord", code: 3,
-                userInfo: [NSLocalizedDescriptionKey: "录制文件写入失败"])
+        do {
+            try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: .global(qos: .userInitiated))
+            try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: .global(qos: .userInitiated))
+            try stream.addStreamOutput(self, type: .microphone, sampleHandlerQueue: .global(qos: .userInitiated))
+            self.stream = stream
+            try await stream.startCapture()
+        } catch {
+            cancelWriters()
+            if Self.isScreenCapturePermissionError(error) {
+                throw ScreenRecorderError.screenCapturePermissionDenied
+            }
+            throw error
         }
     }
 
-    private func setupWriter(url: URL, size: CGSize) throws {
-        let w = try AVAssetWriter(outputURL: url, fileType: .mov)
-        let vSettings: [String: Any] = [
-            AVVideoCodecKey: AVVideoCodecType.h264,
+    func stop() async throws -> ScreenRecordingResult {
+        try await stream?.stopCapture()
+
+        guard let bundle else {
+            throw ScreenRecorderError.writerFailed("缺少项目素材目录")
+        }
+        guard screenSessionStarted else {
+            cancelWriters()
+            try? FileManager.default.removeItem(at: bundle.directory)
+            throw ScreenRecorderError.noFramesCaptured
+        }
+
+        videoInput?.markAsFinished()
+        systemAudioInput?.markAsFinished()
+        microphoneInput?.markAsFinished()
+
+        try await finish(writer: screenWriter)
+        if systemAudioSessionStarted {
+            try await finish(writer: systemAudioWriter)
+        } else {
+            systemAudioWriter?.cancelWriting()
+            try? FileManager.default.removeItem(at: bundle.systemAudio)
+        }
+        if microphoneSessionStarted {
+            try await finish(writer: microphoneWriter)
+        } else {
+            microphoneWriter?.cancelWriting()
+            try? FileManager.default.removeItem(at: bundle.microphoneAudio)
+        }
+
+        return ScreenRecordingResult(
+            bundle: bundle,
+            pointSize: pointSize,
+            pixelSize: pixelSize,
+            capturedSystemAudio: systemAudioSessionStarted,
+            capturedMicrophoneAudio: microphoneSessionStarted
+        )
+    }
+
+    nonisolated func stream(
+        _ stream: SCStream,
+        didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
+        of type: SCStreamOutputType
+    ) {
+        guard CMSampleBufferDataIsReady(sampleBuffer) else { return }
+        Task { @MainActor in
+            self.append(sampleBuffer, type: type)
+        }
+    }
+
+    private func setupWriters(bundle: ProjectAssetBundle, size: CGSize) throws {
+        let codec: AVVideoCodecType = max(size.width, size.height) > 4096 ? .hevc : .h264
+        let videoSettings: [String: Any] = [
+            AVVideoCodecKey: codec,
             AVVideoWidthKey: size.width,
             AVVideoHeightKey: size.height
         ]
-        let vIn = AVAssetWriterInput(mediaType: .video, outputSettings: vSettings)
-        vIn.expectsMediaDataInRealTime = true
-        w.add(vIn)
 
-        let aSettings: [String: Any] = [
+        let screenWriter = try AVAssetWriter(outputURL: bundle.screenVideo, fileType: .mov)
+        let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
+        videoInput.expectsMediaDataInRealTime = true
+        screenWriter.add(videoInput)
+        guard screenWriter.startWriting() else {
+            throw ScreenRecorderError.writerFailed(Self.errorSummary(screenWriter.error))
+        }
+
+        let audioSettings: [String: Any] = [
             AVFormatIDKey: kAudioFormatMPEG4AAC,
             AVNumberOfChannelsKey: 2,
-            AVSampleRateKey: 44_100
+            AVSampleRateKey: 44_100,
+            AVEncoderBitRateKey: 128_000
         ]
-        let sysIn = AVAssetWriterInput(mediaType: .audio, outputSettings: aSettings)
-        sysIn.expectsMediaDataInRealTime = true
-        w.add(sysIn)
-        let micIn = AVAssetWriterInput(mediaType: .audio, outputSettings: aSettings)
-        micIn.expectsMediaDataInRealTime = true
-        w.add(micIn)
 
-        self.writer = w
-        self.videoInput = vIn
-        self.systemAudioInput = sysIn
-        self.micAudioInput = micIn
-        guard w.startWriting() else {
-            throw w.error ?? NSError(domain: "SmartRecord", code: 2,
-                userInfo: [NSLocalizedDescriptionKey: "无法开始写入录制文件"])
+        let systemAudioWriter = try AVAssetWriter(outputURL: bundle.systemAudio, fileType: .m4a)
+        let systemAudioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
+        systemAudioInput.expectsMediaDataInRealTime = true
+        systemAudioWriter.add(systemAudioInput)
+        guard systemAudioWriter.startWriting() else {
+            throw ScreenRecorderError.writerFailed(Self.errorSummary(systemAudioWriter.error))
         }
+
+        let microphoneWriter = try AVAssetWriter(outputURL: bundle.microphoneAudio, fileType: .m4a)
+        let microphoneInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
+        microphoneInput.expectsMediaDataInRealTime = true
+        microphoneWriter.add(microphoneInput)
+        guard microphoneWriter.startWriting() else {
+            throw ScreenRecorderError.writerFailed(Self.errorSummary(microphoneWriter.error))
+        }
+
+        self.screenWriter = screenWriter
+        self.systemAudioWriter = systemAudioWriter
+        self.microphoneWriter = microphoneWriter
+        self.videoInput = videoInput
+        self.systemAudioInput = systemAudioInput
+        self.microphoneInput = microphoneInput
     }
 
-    nonisolated func stream(_ stream: SCStream, didOutputSampleBuffer sb: CMSampleBuffer, of type: SCStreamOutputType) {
-        guard CMSampleBufferDataIsReady(sb) else { return }
-        Task { @MainActor in self.append(sb, type: type) }
-    }
+    private func append(_ sampleBuffer: CMSampleBuffer, type: SCStreamOutputType) {
+        let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
 
-    private func append(_ sb: CMSampleBuffer, type: SCStreamOutputType) {
-        guard let writer, writer.status == .writing else { return }
-        if !sessionStarted {
-            writer.startSession(atSourceTime: CMSampleBufferGetPresentationTimeStamp(sb))
-            sessionStarted = true
-        }
-        let input: AVAssetWriterInput?
         switch type {
-        case .screen: input = videoInput
-        case .audio: input = systemAudioInput
-        case .microphone: input = micAudioInput
-        @unknown default: input = nil
-        }
-        if let input, input.isReadyForMoreMediaData {
-            input.append(sb)
+        case .screen:
+            guard let screenWriter, let videoInput, screenWriter.status == .writing else { return }
+            if !screenSessionStarted {
+                screenWriter.startSession(atSourceTime: timestamp)
+                screenSessionStarted = true
+            }
+            if videoInput.isReadyForMoreMediaData {
+                _ = videoInput.append(sampleBuffer)
+            }
+        case .audio:
+            guard let systemAudioWriter, let systemAudioInput, systemAudioWriter.status == .writing else { return }
+            if !systemAudioSessionStarted {
+                systemAudioWriter.startSession(atSourceTime: timestamp)
+                systemAudioSessionStarted = true
+            }
+            if systemAudioInput.isReadyForMoreMediaData {
+                _ = systemAudioInput.append(sampleBuffer)
+            }
+        case .microphone:
+            guard let microphoneWriter, let microphoneInput, microphoneWriter.status == .writing else { return }
+            if !microphoneSessionStarted {
+                microphoneWriter.startSession(atSourceTime: timestamp)
+                microphoneSessionStarted = true
+            }
+            if microphoneInput.isReadyForMoreMediaData {
+                _ = microphoneInput.append(sampleBuffer)
+            }
+        @unknown default:
+            return
         }
     }
 
-    private static func makeOutputURL() -> URL {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("SmartRecord/Recordings", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("\(UUID().uuidString).mov")
+    private func finish(writer: AVAssetWriter?) async throws {
+        guard let writer else { return }
+        await writer.finishWriting()
+        if writer.status == .failed {
+            throw ScreenRecorderError.writerFailed(Self.errorSummary(writer.error))
+        }
+    }
+
+    private func cancelWriters() {
+        screenWriter?.cancelWriting()
+        systemAudioWriter?.cancelWriting()
+        microphoneWriter?.cancelWriting()
+    }
+
+    private static func evenDimension(_ value: Int) -> Int {
+        max(2, value - value % 2)
+    }
+
+    private static func isScreenCapturePermissionError(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        return nsError.domain == "com.apple.ScreenCaptureKit.SCStreamErrorDomain" && nsError.code == -3801
+    }
+
+    private static func errorSummary(_ error: Error?) -> String {
+        guard let error else { return "未知写入错误" }
+        let nsError = error as NSError
+        var parts = ["\(nsError.domain) \(nsError.code)", nsError.localizedDescription]
+        if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
+            parts.append("底层错误：\(underlying.domain) \(underlying.code) \(underlying.localizedDescription)")
+        }
+        return parts.joined(separator: "；")
     }
 }
