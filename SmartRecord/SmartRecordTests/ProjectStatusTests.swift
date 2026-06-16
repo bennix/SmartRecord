@@ -20,6 +20,24 @@ struct ProjectStatusTests {
         #expect(project.warningRawValues == "missingMicrophoneAudio,missingSystemAudio")
     }
 
+    @Test func projectInitializerDeduplicatesWarnings() {
+        let project = Project(
+            rawVideoFilename: "legacy.mov",
+            warnings: [.missingSystemAudio, .missingMicrophoneAudio, .missingSystemAudio]
+        )
+
+        #expect(project.warnings == [.missingMicrophoneAudio, .missingSystemAudio])
+        #expect(project.warningRawValues == "missingMicrophoneAudio,missingSystemAudio")
+    }
+
+    @Test func warningGetterDeduplicatesPersistedRawValues() {
+        let project = Project(rawVideoFilename: "legacy.mov")
+
+        project.warningRawValues = "missingSystemAudio,missingMicrophoneAudio,missingSystemAudio"
+
+        #expect(project.warnings == [.missingMicrophoneAudio, .missingSystemAudio])
+    }
+
     @Test func invalidStatusFallsBackToRecorded() {
         let project = Project(rawVideoFilename: "legacy.mov")
 

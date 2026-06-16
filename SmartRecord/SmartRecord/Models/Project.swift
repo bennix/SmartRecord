@@ -27,7 +27,7 @@ final class Project {
         self.rawVideoFilename = rawVideoFilename
         self.assetDirectoryName = assetDirectoryName
         self.statusRawValue = status.rawValue
-        self.warningRawValues = warnings.sorted().map(\.rawValue).joined(separator: ",")
+        self.warningRawValues = Self.serializeWarnings(warnings)
         self.clickEvents = []
         self.cursorSamples = []
         self.settings = RenderSettings()
@@ -39,19 +39,28 @@ final class Project {
     }
 
     var warnings: [ProjectWarning] {
-        warningRawValues
-            .split(separator: ",")
-            .compactMap { ProjectWarning(rawValue: String($0)) }
-            .sorted()
+        Self.normalizeWarnings(
+            warningRawValues
+                .split(separator: ",")
+                .compactMap { ProjectWarning(rawValue: String($0)) }
+        )
     }
 
     func setWarnings(_ warnings: [ProjectWarning]) {
-        warningRawValues = Set(warnings).sorted().map(\.rawValue).joined(separator: ",")
+        warningRawValues = Self.serializeWarnings(warnings)
     }
 
     func addWarning(_ warning: ProjectWarning) {
         var next = Set(warnings)
         next.insert(warning)
         setWarnings(Array(next))
+    }
+
+    private static func normalizeWarnings(_ warnings: [ProjectWarning]) -> [ProjectWarning] {
+        Set(warnings).sorted()
+    }
+
+    private static func serializeWarnings(_ warnings: [ProjectWarning]) -> String {
+        normalizeWarnings(warnings).map(\.rawValue).joined(separator: ",")
     }
 }
