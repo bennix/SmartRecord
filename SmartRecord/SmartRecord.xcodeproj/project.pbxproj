@@ -6,8 +6,19 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		937E0FE12FE0DD26009BDA78 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 937E0F992FE0C204009BDA78 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 937E0FA02FE0C204009BDA78;
+			remoteInfo = SmartRecord;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		937E0FA12FE0C204009BDA78 /* SmartRecord.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SmartRecord.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		937E0FDD2FE0DD26009BDA78 /* SmartRecordTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SmartRecordTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -16,10 +27,22 @@
 			path = SmartRecord;
 			sourceTree = "<group>";
 		};
+		937E0FDE2FE0DD26009BDA78 /* SmartRecordTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SmartRecordTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		937E0F9E2FE0C204009BDA78 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		937E0FDA2FE0DD26009BDA78 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +56,7 @@
 			isa = PBXGroup;
 			children = (
 				937E0FA32FE0C204009BDA78 /* SmartRecord */,
+				937E0FDE2FE0DD26009BDA78 /* SmartRecordTests */,
 				937E0FA22FE0C204009BDA78 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +65,7 @@
 			isa = PBXGroup;
 			children = (
 				937E0FA12FE0C204009BDA78 /* SmartRecord.app */,
+				937E0FDD2FE0DD26009BDA78 /* SmartRecordTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -70,6 +95,29 @@
 			productReference = 937E0FA12FE0C204009BDA78 /* SmartRecord.app */;
 			productType = "com.apple.product-type.application";
 		};
+		937E0FDC2FE0DD26009BDA78 /* SmartRecordTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 937E0FE52FE0DD26009BDA78 /* Build configuration list for PBXNativeTarget "SmartRecordTests" */;
+			buildPhases = (
+				937E0FD92FE0DD26009BDA78 /* Sources */,
+				937E0FDA2FE0DD26009BDA78 /* Frameworks */,
+				937E0FDB2FE0DD26009BDA78 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				937E0FE22FE0DD26009BDA78 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				937E0FDE2FE0DD26009BDA78 /* SmartRecordTests */,
+			);
+			name = SmartRecordTests;
+			packageProductDependencies = (
+			);
+			productName = SmartRecordTests;
+			productReference = 937E0FDD2FE0DD26009BDA78 /* SmartRecordTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -82,6 +130,10 @@
 				TargetAttributes = {
 					937E0FA02FE0C204009BDA78 = {
 						CreatedOnToolsVersion = 26.5;
+					};
+					937E0FDC2FE0DD26009BDA78 = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = 937E0FA02FE0C204009BDA78;
 					};
 				};
 			};
@@ -100,12 +152,20 @@
 			projectRoot = "";
 			targets = (
 				937E0FA02FE0C204009BDA78 /* SmartRecord */,
+				937E0FDC2FE0DD26009BDA78 /* SmartRecordTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		937E0F9F2FE0C204009BDA78 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		937E0FDB2FE0DD26009BDA78 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +182,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		937E0FD92FE0DD26009BDA78 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		937E0FE22FE0DD26009BDA78 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 937E0FA02FE0C204009BDA78 /* SmartRecord */;
+			targetProxy = 937E0FE12FE0DD26009BDA78 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		937E0FAC2FE0C205009BDA78 /* Debug */ = {
@@ -309,6 +384,46 @@
 			};
 			name = Release;
 		};
+		937E0FE32FE0DD26009BDA78 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5N66S29EK2;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = fudan.miniS.SmartRecordTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SmartRecord.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SmartRecord";
+			};
+			name = Debug;
+		};
+		937E0FE42FE0DD26009BDA78 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 5N66S29EK2;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = fudan.miniS.SmartRecordTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SmartRecord.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SmartRecord";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -326,6 +441,15 @@
 			buildConfigurations = (
 				937E0FAF2FE0C205009BDA78 /* Debug */,
 				937E0FB02FE0C205009BDA78 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		937E0FE52FE0DD26009BDA78 /* Build configuration list for PBXNativeTarget "SmartRecordTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				937E0FE32FE0DD26009BDA78 /* Debug */,
+				937E0FE42FE0DD26009BDA78 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
