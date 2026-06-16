@@ -37,4 +37,42 @@ struct ProjectAssetStoreTests {
         #expect(!FileManager.default.fileExists(atPath: bundle.finalVideo.path))
         #expect(!FileManager.default.fileExists(atPath: bundle.finalVTT.path))
     }
+
+    @Test func rejectsInvalidDirectoryNames() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SmartRecordAssetStoreTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let store = ProjectAssetStore(rootDirectory: root)
+
+        #expect(throws: ProjectAssetStoreError.invalidDirectoryName) {
+            try store.bundle(named: "../outside")
+        }
+        #expect(throws: ProjectAssetStoreError.invalidDirectoryName) {
+            try store.removeGeneratedOutputs(for: "../outside")
+        }
+        #expect(throws: ProjectAssetStoreError.invalidDirectoryName) {
+            try store.removeProject(named: "../outside")
+        }
+    }
+
+    @Test func removesOnlyValidProjectDirectory() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SmartRecordAssetStoreTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let store = ProjectAssetStore(rootDirectory: root)
+        let bundle = try store.createProjectBundle()
+        let outside = root.deletingLastPathComponent()
+            .appendingPathComponent("outside-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: outside) }
+
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        try Data("screen".utf8).write(to: bundle.screenVideo)
+
+        try store.removeProject(named: bundle.directoryName)
+
+        #expect(!FileManager.default.fileExists(atPath: bundle.directory.path))
+        #expect(FileManager.default.fileExists(atPath: outside.path))
+    }
 }

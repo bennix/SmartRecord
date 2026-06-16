@@ -14,7 +14,7 @@ struct ProjectStatusTests {
     @Test func projectStoresWarningsAsSortedRawValues() {
         let project = Project(rawVideoFilename: "legacy.mov")
 
-        project.setWarnings([.missingMicrophoneAudio, .missingSystemAudio])
+        project.setWarnings([.missingSystemAudio, .missingMicrophoneAudio, .missingSystemAudio])
 
         #expect(project.warnings == [.missingMicrophoneAudio, .missingSystemAudio])
         #expect(project.warningRawValues == "missingMicrophoneAudio,missingSystemAudio")

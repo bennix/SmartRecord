@@ -6,9 +6,9 @@ final class Project {
     var createdAt: Date
     var duration: Double
     var rawVideoFilename: String
-    var assetDirectoryName: String
-    var statusRawValue: String
-    var warningRawValues: String
+    var assetDirectoryName: String = ""
+    var statusRawValue: String = ProjectStatus.recorded.rawValue
+    var warningRawValues: String = ""
 
     @Relationship(deleteRule: .cascade) var clickEvents: [ClickEvent]
     @Relationship(deleteRule: .cascade) var cursorSamples: [CursorSample]
@@ -46,7 +46,7 @@ final class Project {
     }
 
     func setWarnings(_ warnings: [ProjectWarning]) {
-        warningRawValues = warnings.sorted().map(\.rawValue).joined(separator: ",")
+        warningRawValues = Set(warnings).sorted().map(\.rawValue).joined(separator: ",")
     }
 
     func addWarning(_ warning: ProjectWarning) {

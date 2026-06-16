@@ -1,5 +1,9 @@
 import Foundation
 
+enum ProjectAssetStoreError: Error, Equatable {
+    case invalidDirectoryName
+}
+
 struct ProjectAssetBundle: Equatable {
     let directoryName: String
     let directory: URL
@@ -26,26 +30,40 @@ struct ProjectAssetStore {
         return ProjectAssetBundle(directoryName: directoryName, directory: directory)
     }
 
-    func bundle(named directoryName: String) -> ProjectAssetBundle {
-        let directory = rootDirectory.appendingPathComponent(directoryName, isDirectory: true)
-        return ProjectAssetBundle(directoryName: directoryName, directory: directory)
+    func bundle(named directoryName: String) throws -> ProjectAssetBundle {
+        let validatedDirectoryName = try validateDirectoryName(directoryName)
+        let directory = rootDirectory.appendingPathComponent(validatedDirectoryName, isDirectory: true)
+        return ProjectAssetBundle(directoryName: validatedDirectoryName, directory: directory)
     }
 
     func removeGeneratedOutputs(for directoryName: String) throws {
-        let bundle = bundle(named: directoryName)
+        let bundle = try bundle(named: directoryName)
         try removeIfPresent(bundle.finalVideo)
         try removeIfPresent(bundle.finalVTT)
     }
 
     func removeProject(named directoryName: String) throws {
-        let directory = rootDirectory.appendingPathComponent(directoryName, isDirectory: true)
-        guard FileManager.default.fileExists(atPath: directory.path) else { return }
-        try FileManager.default.removeItem(at: directory)
+        let bundle = try bundle(named: directoryName)
+        guard FileManager.default.fileExists(atPath: bundle.directory.path) else { return }
+        try FileManager.default.removeItem(at: bundle.directory)
     }
 
     private func removeIfPresent(_ url: URL) throws {
         guard FileManager.default.fileExists(atPath: url.path) else { return }
         try FileManager.default.removeItem(at: url)
+    }
+
+    private func validateDirectoryName(_ directoryName: String) throws -> String {
+        guard let uuid = UUID(uuidString: directoryName) else {
+            throw ProjectAssetStoreError.invalidDirectoryName
+        }
+
+        let normalizedDirectoryName = uuid.uuidString
+        guard directoryName.uppercased() == normalizedDirectoryName else {
+            throw ProjectAssetStoreError.invalidDirectoryName
+        }
+
+        return normalizedDirectoryName
     }
 
     private static var defaultRootDirectory: URL {
