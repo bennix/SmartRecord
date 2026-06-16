@@ -146,8 +146,9 @@ struct ContentView: View {
     }
 
     private func delete(_ project: Project) {
-        let bundle = coordinator.recordingBundle(for: project)
-        try? FileManager.default.removeItem(at: bundle.directory)
+        if let bundle = coordinator.recordingBundle(for: project) {
+            try? FileManager.default.removeItem(at: bundle.directory)
+        }
         context.delete(project)
         try? context.save()
     }

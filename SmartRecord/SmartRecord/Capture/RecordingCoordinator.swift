@@ -15,13 +15,17 @@ final class RecordingCoordinator {
     var lastProjectDirectory: URL?
     var recordingStartedAt: Date?
 
-    private let assetStore = ProjectAssetStore()
+    private let assetStore: ProjectAssetStore
     private var activeBundle: ProjectAssetBundle?
     private var recorder: ScreenRecorder?
     private var tap: MouseEventTap?
     private var buffer: MouseEventBuffer?
     private var clock: RecordingClock?
     private var startDate = Date.now
+
+    init(assetStore: ProjectAssetStore = ProjectAssetStore()) {
+        self.assetStore = assetStore
+    }
 
     func startRecording() async {
         guard !isRecording, !isStarting else { return }
@@ -147,14 +151,9 @@ final class RecordingCoordinator {
         cleanupCaptureState()
     }
 
-    func recordingBundle(for project: Project) -> ProjectAssetBundle {
-        if let bundle = try? assetStore.bundle(named: project.assetDirectoryName) {
-            return bundle
-        }
-
-        let directoryName = project.assetDirectoryName.isEmpty ? project.rawVideoFilename : project.assetDirectoryName
-        let directory = assetStore.rootDirectory.appendingPathComponent(directoryName, isDirectory: true)
-        return ProjectAssetBundle(directoryName: directoryName, directory: directory)
+    func recordingBundle(for project: Project) -> ProjectAssetBundle? {
+        guard !project.assetDirectoryName.isEmpty else { return nil }
+        return try? assetStore.bundle(named: project.assetDirectoryName)
     }
 
     func revealLastProject() {
@@ -163,7 +162,8 @@ final class RecordingCoordinator {
     }
 
     func reveal(project: Project) {
-        NSWorkspace.shared.activateFileViewerSelecting([recordingBundle(for: project).directory])
+        guard let bundle = recordingBundle(for: project) else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([bundle.directory])
     }
 
     func openScreenRecordingSettings() {

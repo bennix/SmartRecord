@@ -1,10 +1,10 @@
 import Foundation
 
-enum ProjectAssetStoreError: Error, Equatable {
+nonisolated enum ProjectAssetStoreError: Error, Equatable {
     case invalidDirectoryName
 }
 
-struct ProjectAssetBundle: Equatable {
+nonisolated struct ProjectAssetBundle: Equatable {
     let directoryName: String
     let directory: URL
 
@@ -16,7 +16,7 @@ struct ProjectAssetBundle: Equatable {
     var finalVTT: URL { directory.appendingPathComponent("final.vtt") }
 }
 
-struct ProjectAssetStore {
+nonisolated struct ProjectAssetStore {
     let rootDirectory: URL
 
     init(rootDirectory: URL = ProjectAssetStore.defaultRootDirectory) {

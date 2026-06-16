@@ -75,4 +75,42 @@ struct ProjectAssetStoreTests {
         #expect(!FileManager.default.fileExists(atPath: bundle.directory.path))
         #expect(FileManager.default.fileExists(atPath: outside.path))
     }
+
+    @MainActor
+    @Test func recordingCoordinatorReturnsBundleForValidAssetDirectory() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SmartRecordAssetStoreTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let store = ProjectAssetStore(rootDirectory: root)
+        let bundle = try store.createProjectBundle()
+        let coordinator = RecordingCoordinator(assetStore: store)
+        let project = Project(rawVideoFilename: "screen.mov", assetDirectoryName: bundle.directoryName)
+
+        #expect(coordinator.recordingBundle(for: project) == bundle)
+    }
+
+    @MainActor
+    @Test func recordingCoordinatorRejectsInvalidStoredAssetDirectory() {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SmartRecordAssetStoreTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let coordinator = RecordingCoordinator(assetStore: ProjectAssetStore(rootDirectory: root))
+        let project = Project(rawVideoFilename: "screen.mov", assetDirectoryName: "../outside")
+
+        #expect(coordinator.recordingBundle(for: project) == nil)
+    }
+
+    @MainActor
+    @Test func recordingCoordinatorDoesNotInventLegacyBundlePath() {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SmartRecordAssetStoreTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let coordinator = RecordingCoordinator(assetStore: ProjectAssetStore(rootDirectory: root))
+        let project = Project(rawVideoFilename: "../outside.mov")
+
+        #expect(coordinator.recordingBundle(for: project) == nil)
+    }
 }
