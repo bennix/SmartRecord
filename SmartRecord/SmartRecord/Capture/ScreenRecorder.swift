@@ -60,6 +60,10 @@ final class ScreenRecorder: NSObject, SCStreamOutput {
         systemAudioInput?.markAsFinished()
         micAudioInput?.markAsFinished()
         await writer?.finishWriting()
+        if let writer, writer.status == .failed {
+            throw writer.error ?? NSError(domain: "SmartRecord", code: 3,
+                userInfo: [NSLocalizedDescriptionKey: "录制文件写入失败"])
+        }
     }
 
     private func setupWriter(url: URL, size: CGSize) throws {
@@ -89,7 +93,10 @@ final class ScreenRecorder: NSObject, SCStreamOutput {
         self.videoInput = vIn
         self.systemAudioInput = sysIn
         self.micAudioInput = micIn
-        w.startWriting()
+        guard w.startWriting() else {
+            throw w.error ?? NSError(domain: "SmartRecord", code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "无法开始写入录制文件"])
+        }
     }
 
     nonisolated func stream(_ stream: SCStream, didOutputSampleBuffer sb: CMSampleBuffer, of type: SCStreamOutputType) {
