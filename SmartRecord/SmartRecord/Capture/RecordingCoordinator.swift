@@ -166,6 +166,11 @@ final class RecordingCoordinator {
         NSWorkspace.shared.activateFileViewerSelecting([bundle.directory])
     }
 
+    func open(project: Project) {
+        guard let bundle = recordingBundle(for: project) else { return }
+        NSWorkspace.shared.open(bundle.screenVideo)
+    }
+
     func openScreenRecordingSettings() {
         openPrivacySettings(anchor: "Privacy_ScreenCapture")
     }
