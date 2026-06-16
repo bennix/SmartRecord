@@ -20,6 +20,7 @@ final class ScreenRecorder: NSObject, SCStreamOutput {
     private var sessionStarted = false
     private(set) var outputURL: URL?
     private(set) var pixelSize: CGSize = .zero
+    private(set) var pointSize: CGSize = .zero
 
     func start() async throws -> URL {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
@@ -40,6 +41,7 @@ final class ScreenRecorder: NSObject, SCStreamOutput {
         config.captureMicrophone = true
         let size = CGSize(width: config.width, height: config.height)
         pixelSize = size
+        pointSize = CGSize(width: display.width, height: display.height)
 
         let url = Self.makeOutputURL()
         outputURL = url
