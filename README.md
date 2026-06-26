@@ -4,7 +4,7 @@ SmartRecord is a macOS screen recorder for clean software demos, tutorials, and 
 
 ## Download
 
-- [Download SmartRecord 1.03 DMG](releases/SmartRecord-1.03.dmg)
+- [Download SmartRecord 1.03 DMG](https://github.com/bennix/SmartRecord/releases/download/v1.03/SmartRecord-1.03.dmg)
 - [GitHub Pages landing page](https://bennix.github.io/SmartRecord/)
 
 ## Highlights
@@ -29,4 +29,3 @@ The repository includes bundled command line dependencies used by the app:
 ## App Store Review Note
 
 SmartRecord uses `com.apple.security.assets.movies.read-write` because recording project files are saved by default in `~/Movies/SmartRecord/Projects`, a user-visible Movies folder location. The app writes and manages `screen.mov`, `system.m4a`, `microphone.m4a`, `final.mp4`, and `final.vtt` there.
-
