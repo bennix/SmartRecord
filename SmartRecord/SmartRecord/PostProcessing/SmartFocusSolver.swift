@@ -27,7 +27,7 @@ nonisolated struct SmartFocusSolver {
             return SmartFocusSample(nx: 0.5, ny: 0.5, zoom: 1.0)
         }
 
-        if let segment = segments.first(where: { $0.start <= time && time <= $0.end }) {
+        if let segment = segments.last(where: { $0.start <= time && time <= $0.end }) {
             return sample(in: segment, at: time)
         }
 
@@ -59,28 +59,14 @@ nonisolated struct SmartFocusSolver {
             .sorted { $0.time < $1.time }
         guard !sortedEvents.isEmpty else { return [] }
 
-        var segments: [FocusSegment] = []
-        for event in sortedEvents {
-            let next = FocusSegment(
+        return sortedEvents.map { event in
+            FocusSegment(
                 start: max(0, event.time - 0.2),
                 end: min(max(duration, event.time + 1.2), event.time + 1.2),
                 nx: min(max(event.nx, 0), 1),
                 ny: min(max(event.ny, 0), 1)
             )
-
-            if let last = segments.last, next.start <= last.end + 0.35 {
-                let merged = FocusSegment(
-                    start: last.start,
-                    end: max(last.end, next.end),
-                    nx: next.nx,
-                    ny: next.ny
-                )
-                segments[segments.count - 1] = merged
-            } else {
-                segments.append(next)
-            }
         }
-        return segments
     }
 
     private struct FocusSegment {

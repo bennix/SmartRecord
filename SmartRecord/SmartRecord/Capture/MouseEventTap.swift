@@ -1,11 +1,13 @@
-import CoreGraphics
+import AppKit
 import Foundation
 
 final class MouseEventTap {
-    private var tap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    private var timer: Timer?
+    private var lastLocation: CGPoint?
+    private var lastLeftButtonDown = false
     private let buffer: MouseEventBuffer
     private let clock: RecordingClock
+    private let sampleInterval: TimeInterval = 1.0 / 30.0
 
     init(buffer: MouseEventBuffer, clock: RecordingClock) {
         self.buffer = buffer
@@ -14,61 +16,55 @@ final class MouseEventTap {
 
     deinit { stop() }
 
-    /// Returns false if Accessibility permission was not granted (tap creation fails).
     @discardableResult
     func start() -> Bool {
-        guard tap == nil else { return true }
-        let mask = (1 << CGEventType.leftMouseDown.rawValue)
-                 | (1 << CGEventType.mouseMoved.rawValue)
-                 | (1 << CGEventType.leftMouseDragged.rawValue)
-
-        let callback: CGEventTapCallBack = { _, type, event, refcon in
-            let me = Unmanaged<MouseEventTap>.fromOpaque(refcon!).takeUnretainedValue()
-            me.handle(type: type, event: event)
-            return Unmanaged.passUnretained(event)
+        guard timer == nil else { return true }
+        sample()
+        let timer = Timer(timeInterval: sampleInterval, repeats: true) { [weak self] _ in
+            self?.sample()
         }
-
-        guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .listenOnly,
-            eventsOfInterest: CGEventMask(mask),
-            callback: callback,
-            userInfo: Unmanaged.passUnretained(self).toOpaque()
-        ) else {
-            return false   // most likely missing Accessibility permission
-        }
-
-        self.tap = tap
-        let src = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        self.runLoopSource = src
-        CFRunLoopAddSource(CFRunLoopGetMain(), src, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
         return true
     }
 
     func stop() {
-        if let tap { CGEvent.tapEnable(tap: tap, enable: false) }
-        if let src = runLoopSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .commonModes) }
-        tap = nil
-        runLoopSource = nil
+        timer?.invalidate()
+        timer = nil
+        lastLocation = nil
+        lastLeftButtonDown = false
     }
 
-    private func handle(type: CGEventType, event: CGEvent) {
-        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+    private func sample() {
+        guard let event = CGEvent(source: nil) else {
             return
         }
-        let ticks = mach_absolute_time()
-        let t = clock.elapsed(atTicks: ticks)
-        let loc = event.location   // global coords, top-left origin
-        let kind: MouseEventKind
-        switch type {
-        case .leftMouseDown: kind = .leftMouseDown
-        case .mouseMoved: kind = .mouseMoved
-        case .leftMouseDragged: kind = .leftMouseDragged
-        default: return
+        let location = event.location
+        let leftButtonDown = (NSEvent.pressedMouseButtons & 1) == 1
+        defer {
+            lastLocation = location
+            lastLeftButtonDown = leftButtonDown
         }
-        buffer.record(kind: kind, time: t, px: Double(loc.x), py: Double(loc.y))
+
+        let time = clock.elapsed(atTicks: mach_absolute_time())
+        if leftButtonDown && !lastLeftButtonDown {
+            buffer.record(kind: .leftMouseDown, time: time, px: Double(location.x), py: Double(location.y))
+            return
+        }
+
+        guard let lastLocation else {
+            buffer.record(kind: .mouseMoved, time: time, px: Double(location.x), py: Double(location.y))
+            return
+        }
+
+        let moved = abs(location.x - lastLocation.x) >= 0.5 || abs(location.y - lastLocation.y) >= 0.5
+        guard moved else { return }
+
+        buffer.record(
+            kind: leftButtonDown ? .leftMouseDragged : .mouseMoved,
+            time: time,
+            px: Double(location.x),
+            py: Double(location.y)
+        )
     }
 }

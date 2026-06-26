@@ -20,20 +20,20 @@ enum ScreenRecorderError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .screenCapturePermissionDenied:
-            return "未获得屏幕录制权限。请在系统设置中允许 SmartRecord 录制屏幕，然后重新开始录制。"
+            return AppStrings.current(.screenPermissionDenied)
         case .noDisplayAvailable:
-            return "找不到可录制的显示器。"
+            return AppStrings.current(.noRecordableDisplay)
         case .noFramesCaptured:
-            return "录制时间太短，没有捕捉到可保存的视频帧。请至少录制 2 秒后再停止。"
+            return AppStrings.current(.recordingTooShort)
         case .writerFailed(let message):
-            return "录制文件写入失败：\(message)"
+            return AppStrings.current.writerFailed(message)
         }
     }
 
     var recoverySuggestion: String? {
         switch self {
         case .screenCapturePermissionDenied:
-            return "打开 系统设置 > 隐私与安全性 > 屏幕录制，勾选 SmartRecord。若已勾选，请关闭后重新打开本应用。"
+            return AppStrings.current(.screenPermissionRecovery)
         case .noDisplayAvailable, .noFramesCaptured, .writerFailed:
             return nil
         }
@@ -44,6 +44,8 @@ struct ScreenRecordingResult {
     let bundle: ProjectAssetBundle
     let pointSize: CGSize
     let pixelSize: CGSize
+    let displayFrame: CGRect
+    let frameRate: RecordingFrameRate
     let capturedSystemAudio: Bool
     let capturedMicrophoneAudio: Bool
 }
@@ -66,8 +68,14 @@ nonisolated final class ScreenRecorder: NSObject, SCStreamOutput {
 
     private(set) var pointSize: CGSize = .zero
     private(set) var pixelSize: CGSize = .zero
+    private(set) var displayFrame: CGRect = .zero
+    private(set) var frameRate: RecordingFrameRate = .default
 
-    func start(bundle: ProjectAssetBundle) async throws {
+    func start(
+        bundle: ProjectAssetBundle,
+        audioMode: AudioCaptureMode = .both,
+        frameRate: RecordingFrameRate = .default
+    ) async throws {
         if !CGPreflightScreenCaptureAccess() {
             guard CGRequestScreenCaptureAccess() else {
                 throw ScreenRecorderError.screenCapturePermissionDenied
@@ -96,22 +104,36 @@ nonisolated final class ScreenRecorder: NSObject, SCStreamOutput {
         let config = SCStreamConfiguration()
         config.width = Self.evenDimension(display.width)
         config.height = Self.evenDimension(display.height)
-        config.minimumFrameInterval = CMTime(value: 1, timescale: 60)
+        config.minimumFrameInterval = frameRate.frameDuration
         config.pixelFormat = kCVPixelFormatType_32BGRA
-        config.capturesAudio = true
-        microphoneCaptureEnabled = await Self.requestMicrophoneAccessIfNeeded()
+        config.capturesAudio = audioMode.capturesSystemAudio
+        microphoneCaptureEnabled = audioMode.capturesMicrophone
+            ? await Self.requestMicrophoneAccessIfNeeded()
+            : false
         config.captureMicrophone = microphoneCaptureEnabled
 
         self.bundle = bundle
+        self.frameRate = frameRate
+        let displayFrame = display.frame.isEmpty ? CGDisplayBounds(display.displayID) : display.frame
+        self.displayFrame = displayFrame
         pixelSize = CGSize(width: config.width, height: config.height)
-        pointSize = NSScreen.main?.frame.size ?? CGSize(width: display.width, height: display.height)
+        pointSize = displayFrame.size == .zero
+            ? CGSize(width: display.width, height: display.height)
+            : displayFrame.size
 
-        try setupWriters(bundle: bundle, size: pixelSize, capturesMicrophone: microphoneCaptureEnabled)
+        try setupWriters(
+            bundle: bundle,
+            size: pixelSize,
+            capturesSystemAudio: audioMode.capturesSystemAudio,
+            capturesMicrophone: microphoneCaptureEnabled
+        )
 
         let stream = SCStream(filter: filter, configuration: config, delegate: nil)
         do {
             try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: sampleQueue)
-            try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: sampleQueue)
+            if audioMode.capturesSystemAudio {
+                try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: sampleQueue)
+            }
             if microphoneCaptureEnabled {
                 do {
                     try stream.addStreamOutput(self, type: .microphone, sampleHandlerQueue: sampleQueue)
@@ -138,7 +160,7 @@ nonisolated final class ScreenRecorder: NSObject, SCStreamOutput {
         try await stream?.stopCapture()
 
         guard let bundle else {
-            throw ScreenRecorderError.writerFailed("缺少项目素材目录")
+            throw ScreenRecorderError.writerFailed(AppStrings.current(.missingAssetDirectory))
         }
         let finishState = sampleQueue.sync {
             let state = FinishState(
@@ -174,6 +196,8 @@ nonisolated final class ScreenRecorder: NSObject, SCStreamOutput {
             bundle: bundle,
             pointSize: pointSize,
             pixelSize: pixelSize,
+            displayFrame: displayFrame,
+            frameRate: frameRate,
             capturedSystemAudio: capturedSystemAudio,
             capturedMicrophoneAudio: capturedMicrophoneAudio
         )
@@ -188,7 +212,12 @@ nonisolated final class ScreenRecorder: NSObject, SCStreamOutput {
         append(sampleBuffer, type: type)
     }
 
-    private func setupWriters(bundle: ProjectAssetBundle, size: CGSize, capturesMicrophone: Bool) throws {
+    private func setupWriters(
+        bundle: ProjectAssetBundle,
+        size: CGSize,
+        capturesSystemAudio: Bool,
+        capturesMicrophone: Bool
+    ) throws {
         let codec: AVVideoCodecType = max(size.width, size.height) > 4096 ? .hevc : .h264
         let videoSettings: [String: Any] = [
             AVVideoCodecKey: codec,
@@ -211,18 +240,21 @@ nonisolated final class ScreenRecorder: NSObject, SCStreamOutput {
             AVEncoderBitRateKey: 128_000
         ]
 
-        let systemAudioWriter = try AVAssetWriter(outputURL: bundle.systemAudio, fileType: .m4a)
-        let systemAudioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
-        systemAudioInput.expectsMediaDataInRealTime = true
-        systemAudioWriter.add(systemAudioInput)
-        guard systemAudioWriter.startWriting() else {
-            throw ScreenRecorderError.writerFailed(Self.errorSummary(systemAudioWriter.error))
-        }
-
         self.screenWriter = screenWriter
-        self.systemAudioWriter = systemAudioWriter
         self.videoInput = videoInput
-        self.systemAudioInput = systemAudioInput
+
+        if capturesSystemAudio {
+            let systemAudioWriter = try AVAssetWriter(outputURL: bundle.systemAudio, fileType: .m4a)
+            let systemAudioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioSettings)
+            systemAudioInput.expectsMediaDataInRealTime = true
+            systemAudioWriter.add(systemAudioInput)
+            guard systemAudioWriter.startWriting() else {
+                throw ScreenRecorderError.writerFailed(Self.errorSummary(systemAudioWriter.error))
+            }
+
+            self.systemAudioWriter = systemAudioWriter
+            self.systemAudioInput = systemAudioInput
+        }
 
         if capturesMicrophone {
             let microphoneWriter = try AVAssetWriter(outputURL: bundle.microphoneAudio, fileType: .m4a)
@@ -344,7 +376,7 @@ nonisolated final class ScreenRecorder: NSObject, SCStreamOutput {
     }
 
     private static func errorSummary(_ error: Error?) -> String {
-        guard let error else { return "未知写入错误" }
+        guard let error else { return AppStrings.current(.unknownWriterError) }
         let nsError = error as NSError
         var parts = ["\(nsError.domain) \(nsError.code)", nsError.localizedDescription]
         if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {

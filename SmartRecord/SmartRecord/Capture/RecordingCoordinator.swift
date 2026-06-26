@@ -8,15 +8,23 @@ final class RecordingCoordinator {
     var isRecording = false
     var isStarting = false
     var lastEventCount = 0
-    var permissionMissing = false
     var screenRecordingPermissionMissing = false
-    var statusMessage = "准备录制"
+    var statusMessage = AppStrings.current(.preparingRecording)
     var failureMessage: String?
     var lastProjectDirectory: URL?
     var recordingStartedAt: Date?
+    var selectedAudioMode: AudioCaptureMode = .both
+    var selectedFrameRate: RecordingFrameRate = .default
+    var shouldGenerateSubtitles = true
+    var isDownloadingWhisperModel = false
+    var whisperModelDownloadProgress: Double?
+    var whisperModelInstalled = false
+    var whisperModelMessage = AppStrings.current(.checkingMediumModel)
+    var whisperModelPath: URL?
 
     private let assetStore: ProjectAssetStore
     private let postProcessor = PostProcessingCoordinator()
+    private let whisperModelManager = WhisperModelManager()
     private var activeBundle: ProjectAssetBundle?
     private var recorder: ScreenRecorder?
     private var tap: MouseEventTap?
@@ -26,6 +34,18 @@ final class RecordingCoordinator {
 
     init(assetStore: ProjectAssetStore = ProjectAssetStore()) {
         self.assetStore = assetStore
+        refreshWhisperModelStatus()
+    }
+
+    func refreshLocalizedText() {
+        refreshWhisperModelStatus()
+        if isStarting {
+            statusMessage = AppStrings.current(.preparingRecordingLong)
+        } else if isRecording {
+            statusMessage = AppStrings.current(.recording)
+        } else if failureMessage == nil {
+            statusMessage = AppStrings.current(.preparingRecording)
+        }
     }
 
     func startRecording() async {
@@ -33,23 +53,26 @@ final class RecordingCoordinator {
 
         isStarting = true
         failureMessage = nil
-        permissionMissing = false
         screenRecordingPermissionMissing = false
-        statusMessage = "正在准备录制..."
+        statusMessage = AppStrings.current(.preparingRecordingLong)
 
         let bundle: ProjectAssetBundle
         do {
             bundle = try assetStore.createProjectBundle()
         } catch {
-            failureMessage = "无法创建项目目录：\(error.localizedDescription)"
-            statusMessage = "录制启动失败"
+            failureMessage = AppStrings.current.startFailedWithDetail(error.localizedDescription)
+            statusMessage = AppStrings.current(.startFailed)
             isStarting = false
             return
         }
 
         let recorder = ScreenRecorder()
         do {
-            try await recorder.start(bundle: bundle)
+            try await recorder.start(
+                bundle: bundle,
+                audioMode: selectedAudioMode,
+                frameRate: selectedFrameRate
+            )
         } catch {
             try? assetStore.removeProject(named: bundle.directoryName)
             handleStartFailure(error)
@@ -59,11 +82,10 @@ final class RecordingCoordinator {
 
         let clock = RecordingClock(startTicks: mach_absolute_time())
         let buffer = MouseEventBuffer(
-            screenWidth: recorder.pointSize.width,
-            screenHeight: recorder.pointSize.height
+            screenFrame: recorder.displayFrame
         )
         let tap = MouseEventTap(buffer: buffer, clock: clock)
-        permissionMissing = !tap.start()
+        tap.start()
 
         activeBundle = bundle
         self.recorder = recorder
@@ -75,19 +97,19 @@ final class RecordingCoordinator {
         lastProjectDirectory = bundle.directory
         isRecording = true
         isStarting = false
-        statusMessage = permissionMissing ? "正在录制，鼠标事件权限缺失" : "正在录制"
+        statusMessage = AppStrings.current(.recording)
     }
 
     func stopRecording(context: ModelContext) async {
         guard isRecording || isStarting else { return }
 
         tap?.stop()
-        statusMessage = "正在保存原始素材..."
+        statusMessage = AppStrings.current(.savingRawAssets)
 
         let result: ScreenRecordingResult
         do {
             guard let recorder else {
-                throw ScreenRecorderError.writerFailed("录制器未启动")
+                throw ScreenRecorderError.writerFailed(AppStrings.current(.recorderNotStarted))
             }
             result = try await recorder.stop()
         } catch {
@@ -107,8 +129,8 @@ final class RecordingCoordinator {
         recordingStartedAt = nil
 
         guard let buffer else {
-            failureMessage = "鼠标事件缓存丢失"
-            statusMessage = "录制保存失败"
+            failureMessage = AppStrings.current(.mouseEventCacheLost)
+            statusMessage = AppStrings.current(.saveFailed)
             cleanupCaptureState()
             return
         }
@@ -118,6 +140,9 @@ final class RecordingCoordinator {
             duration: Date.now.timeIntervalSince(startDate),
             rawVideoFilename: result.bundle.screenVideo.lastPathComponent,
             assetDirectoryName: result.bundle.directoryName,
+            audioCaptureMode: selectedAudioMode,
+            frameRate: result.frameRate,
+            generatesSubtitles: shouldGenerateSubtitles,
             status: .recorded
         )
         project.clickEvents = buffer.clicks.map { ClickEvent(time: $0.time, nx: $0.nx, ny: $0.ny) }
@@ -126,13 +151,10 @@ final class RecordingCoordinator {
         }
 
         var warnings: [ProjectWarning] = []
-        if permissionMissing {
-            warnings.append(.missingAccessibilityPermission)
-        }
-        if !result.capturedSystemAudio {
+        if selectedAudioMode.capturesSystemAudio && !result.capturedSystemAudio {
             warnings.append(.missingSystemAudio)
         }
-        if !result.capturedMicrophoneAudio {
+        if selectedAudioMode.capturesMicrophone && !result.capturedMicrophoneAudio {
             warnings.append(.missingMicrophoneAudio)
         }
         project.setWarnings(warnings)
@@ -143,13 +165,13 @@ final class RecordingCoordinator {
             try context.save()
             lastEventCount = project.clickEvents.count + project.cursorSamples.count
             lastProjectDirectory = result.bundle.directory
-            statusMessage = warnings.isEmpty ? "原始素材已保存" : "原始素材已保存，有警告"
+            statusMessage = warnings.isEmpty ? AppStrings.current(.rawAssetsSaved) : AppStrings.current(.rawAssetsSavedWithWarnings)
             Task { @MainActor in
                 await postProcessor.process(project: project, context: context)
             }
         } catch {
-            failureMessage = "项目保存失败：\(error.localizedDescription)"
-            statusMessage = "录制文件已生成，项目保存失败"
+            failureMessage = AppStrings.current.projectSaveFailed(error.localizedDescription)
+            statusMessage = AppStrings.current(.fileGeneratedProjectSaveFailed)
         }
 
         cleanupCaptureState()
@@ -186,16 +208,72 @@ final class RecordingCoordinator {
 
     func regenerateSubtitles(for project: Project, context: ModelContext) {
         Task { @MainActor in
+            project.generatesSubtitles = true
             await postProcessor.transcribeSubtitles(project: project, context: context)
         }
     }
 
-    func openScreenRecordingSettings() {
-        openPrivacySettings(anchor: "Privacy_ScreenCapture")
+    func refreshWhisperModelStatus() {
+        if let model = whisperModelManager.installedModelURL() {
+            whisperModelInstalled = true
+            whisperModelPath = model
+            whisperModelMessage = AppStrings.current(.mediumModelReady)
+        } else {
+            whisperModelInstalled = false
+            whisperModelPath = nil
+            whisperModelMessage = AppStrings.current(.mediumModelNotInstalled)
+        }
     }
 
-    func openAccessibilitySettings() {
-        openPrivacySettings(anchor: "Privacy_Accessibility")
+    func downloadWhisperMediumModel() {
+        guard !isDownloadingWhisperModel else { return }
+
+        isDownloadingWhisperModel = true
+        whisperModelDownloadProgress = nil
+        whisperModelMessage = AppStrings.current(.downloadingMediumModelLarge)
+        failureMessage = nil
+
+        Task { @MainActor in
+            do {
+                let url = try await whisperModelManager.downloadMediumModel { progress in
+                    Task { @MainActor in
+                        self.whisperModelDownloadProgress = progress
+                        if let progress {
+                            self.whisperModelMessage = AppStrings.current.downloadingMediumModelProgress(Int(progress * 100))
+                        } else {
+                            self.whisperModelMessage = AppStrings.current(.downloadingMediumModel)
+                        }
+                    }
+                }
+                whisperModelInstalled = true
+                whisperModelPath = url
+                whisperModelDownloadProgress = 1
+                whisperModelMessage = AppStrings.current(.mediumModelDownloaded)
+                statusMessage = AppStrings.current(.subtitleModelReady)
+            } catch {
+                whisperModelInstalled = false
+                whisperModelPath = nil
+                whisperModelDownloadProgress = nil
+                whisperModelMessage = AppStrings.current(.mediumModelDownloadFailed)
+                failureMessage = error.localizedDescription
+                statusMessage = AppStrings.current(.subtitleModelUnavailable)
+            }
+            isDownloadingWhisperModel = false
+        }
+    }
+
+    func revealWhisperModelFolder() {
+        let directory = whisperModelManager.modelDirectory
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        NSWorkspace.shared.activateFileViewerSelecting([directory])
+    }
+
+    func openWhisperModelDownloadPage() {
+        NSWorkspace.shared.open(WhisperModelManager.downloadURL)
+    }
+
+    func openScreenRecordingSettings() {
+        openPrivacySettings(anchor: "Privacy_ScreenCapture")
     }
 
     private func handleStartFailure(_ error: Error) {
@@ -208,14 +286,14 @@ final class RecordingCoordinator {
         if let recovery, !recovery.isEmpty {
             failureMessage = "\(error.localizedDescription)\n\(recovery)"
         } else {
-            failureMessage = "录制启动失败：\(error.localizedDescription)"
+            failureMessage = AppStrings.current.startFailedWithDetail(error.localizedDescription)
         }
-        statusMessage = screenRecordingPermissionMissing ? "需要屏幕录制权限" : "录制启动失败"
+        statusMessage = screenRecordingPermissionMissing ? AppStrings.current(.screenPermissionStatus) : AppStrings.current(.startFailed)
     }
 
     private func handleStopFailure(_ error: Error) {
         failureMessage = error.localizedDescription
-        statusMessage = "录制保存失败"
+        statusMessage = AppStrings.current(.saveFailed)
         lastProjectDirectory = nil
     }
 

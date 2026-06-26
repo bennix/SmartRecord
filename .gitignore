@@ -4,3 +4,6 @@ DerivedData/
 xcuserdata/
 .DS_Store
 .worktrees/
+.serena/
+SmartRecord 20*/
+*.xcarchive/

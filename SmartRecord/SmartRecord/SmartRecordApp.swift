@@ -22,9 +22,10 @@ struct SmartRecordApp: App {
     }()
 
     var body: some Scene {
-        WindowGroup {
+        Window("SmartRecord", id: "main") {
             ContentView()
         }
         .modelContainer(sharedModelContainer)
+        .defaultSize(width: 1360, height: 820)
     }
 }

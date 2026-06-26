@@ -1,3 +1,4 @@
+import CoreGraphics
 import Testing
 @testable import SmartRecord
 
@@ -25,5 +26,13 @@ struct MouseEventBufferTests {
         buf.record(kind: .mouseMoved, time: 0.5, px: -50, py: 9999)
         #expect(abs(buf.samples[0].nx - 0.0) < 1e-9)
         #expect(abs(buf.samples[0].ny - 1.0) < 1e-9)
+    }
+
+    @Test func normalizesAgainstCapturedDisplayFrameOrigin() {
+        let buf = MouseEventBuffer(screenFrame: CGRect(x: 100, y: 50, width: 1000, height: 500))
+        buf.record(kind: .leftMouseDown, time: 1.0, px: 600, py: 300)
+
+        #expect(abs(buf.clicks[0].nx - 0.5) < 1e-9)
+        #expect(abs(buf.clicks[0].ny - 0.5) < 1e-9)
     }
 }

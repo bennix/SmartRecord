@@ -2,7 +2,7 @@ import Foundation
 
 nonisolated enum WhisperTranscriberError: LocalizedError, Equatable {
     case missingCommand
-    case missingMicrophoneAudio
+    case missingSubtitleAudio
     case missingMediumModel
     case missingAudioConverter
     case failed(Int32, String)
@@ -10,15 +10,15 @@ nonisolated enum WhisperTranscriberError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .missingCommand:
-            return "未找到本地 Whisper 命令。请安装 whisper，或把命令加入 PATH。"
-        case .missingMicrophoneAudio:
-            return "缺少 microphone.m4a，无法生成字幕。"
+            return AppStrings.current(.missingWhisperCommandError)
+        case .missingSubtitleAudio:
+            return AppStrings.current(.missingSubtitleAudioError)
         case .missingMediumModel:
-            return "未找到 whisper.cpp 的 medium 模型。请设置 SMARTRECORD_WHISPER_MODEL，或放置 ggml-medium.bin。"
+            return AppStrings.current(.missingMediumModelError)
         case .missingAudioConverter:
-            return "未找到 ffmpeg，无法为 whisper.cpp 转换 microphone.m4a。"
+            return AppStrings.current(.missingAudioConverterError)
         case .failed(let code, let message):
-            return "Whisper 转录失败（\(code)）：\(message)"
+            return AppStrings.current.whisperFailed(code: code, message: message)
         }
     }
 }
@@ -33,6 +33,7 @@ nonisolated struct WhisperCommandPlan: Equatable {
     let executable: URL
     let arguments: [String]
     let expectedOutput: URL
+    let sourceAudio: URL
     let convertedInput: URL?
     let audioConverter: URL?
 }
@@ -40,13 +41,10 @@ nonisolated struct WhisperCommandPlan: Equatable {
 nonisolated struct WhisperTranscriber {
     var environment: [String: String] = ProcessInfo.processInfo.environment
     var fallbackSearchPaths: [String] = ["/opt/homebrew/bin", "/usr/local/bin"]
+    var bundledToolDirectory: URL? = Bundle.main.resourceURL?.appendingPathComponent("Tools/bin", isDirectory: true)
 
-    func transcribe(bundle: ProjectAssetBundle) async throws {
-        guard FileManager.default.fileExists(atPath: bundle.microphoneAudio.path) else {
-            throw WhisperTranscriberError.missingMicrophoneAudio
-        }
-
-        let plan = try commandPlan(for: bundle)
+    func transcribe(bundle: ProjectAssetBundle, audioMode: AudioCaptureMode = .both) async throws {
+        let plan = try commandPlan(for: bundle, audioMode: audioMode)
         try? FileManager.default.removeItem(at: bundle.finalVTT)
         try? FileManager.default.removeItem(at: plan.expectedOutput)
         if let convertedInput = plan.convertedInput {
@@ -58,7 +56,7 @@ nonisolated struct WhisperTranscriber {
                 executable: audioConverter,
                 arguments: [
                     "-y",
-                    "-i", bundle.microphoneAudio.path,
+                    "-i", plan.sourceAudio.path,
                     "-ar", "16000",
                     "-ac", "1",
                     "-c:a", "pcm_s16le",
@@ -74,11 +72,14 @@ nonisolated struct WhisperTranscriber {
         } else if FileManager.default.fileExists(atPath: plan.expectedOutput.path) {
             try FileManager.default.moveItem(at: plan.expectedOutput, to: bundle.finalVTT)
         } else if !FileManager.default.fileExists(atPath: bundle.finalVTT.path) {
-            throw WhisperTranscriberError.failed(0, "Whisper 未生成 VTT 文件")
+            throw WhisperTranscriberError.failed(0, AppStrings.current(.whisperDidNotGenerateVTT))
         }
     }
 
-    func commandPlan(for bundle: ProjectAssetBundle) throws -> WhisperCommandPlan {
+    func commandPlan(for bundle: ProjectAssetBundle, audioMode: AudioCaptureMode = .both) throws -> WhisperCommandPlan {
+        guard let sourceAudio = subtitleAudioInput(in: bundle, audioMode: audioMode) else {
+            throw WhisperTranscriberError.missingSubtitleAudio
+        }
         guard let command = findWhisperCommand() else {
             throw WhisperTranscriberError.missingCommand
         }
@@ -87,18 +88,19 @@ nonisolated struct WhisperTranscriber {
         case .openAIWhisper:
             let outputDirectory = bundle.directory.path
             let expectedOutput = bundle.directory.appendingPathComponent(
-                bundle.microphoneAudio.deletingPathExtension().lastPathComponent + ".vtt"
+                sourceAudio.deletingPathExtension().lastPathComponent + ".vtt"
             )
             return WhisperCommandPlan(
                 backend: .openAIWhisper,
                 executable: command.url,
                 arguments: [
-                    bundle.microphoneAudio.path,
+                    sourceAudio.path,
                     "--model", "medium",
                     "--output_format", "vtt",
                     "--output_dir", outputDirectory
                 ],
                 expectedOutput: expectedOutput,
+                sourceAudio: sourceAudio,
                 convertedInput: nil,
                 audioConverter: nil
             )
@@ -111,7 +113,7 @@ nonisolated struct WhisperTranscriber {
                 throw WhisperTranscriberError.missingAudioConverter
             }
 
-            let convertedInput = bundle.directory.appendingPathComponent("microphone.wav")
+            let convertedInput = bundle.directory.appendingPathComponent("subtitle-source.wav")
             let outputBase = bundle.finalVTT.deletingPathExtension()
             return WhisperCommandPlan(
                 backend: .whisperCPP,
@@ -124,13 +126,38 @@ nonisolated struct WhisperTranscriber {
                     "-l", "auto"
                 ],
                 expectedOutput: bundle.finalVTT,
+                sourceAudio: sourceAudio,
                 convertedInput: convertedInput,
                 audioConverter: ffmpeg
             )
         }
     }
 
+    func hasAudioConverter() -> Bool {
+        findExecutable(named: "ffmpeg") != nil
+    }
+
+    private func subtitleAudioInput(in bundle: ProjectAssetBundle, audioMode: AudioCaptureMode) -> URL? {
+        let candidates: [URL]
+        switch audioMode {
+        case .both:
+            candidates = [bundle.microphoneAudio, bundle.systemAudio]
+        case .microphoneOnly:
+            candidates = [bundle.microphoneAudio]
+        case .systemOnly:
+            candidates = [bundle.systemAudio]
+        case .none:
+            candidates = []
+        }
+
+        return candidates.first { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
     private func findWhisperCommand() -> (url: URL, backend: WhisperBackend)? {
+        if let bundledWhisperCLI = findBundledWhisperCLI(), probe(bundledWhisperCLI) {
+            return (bundledWhisperCLI, .whisperCPP)
+        }
+
         for command in ["whisper", "whisper-cli"] {
             guard let url = findExecutable(named: command), probe(url) else { continue }
             if command == "whisper-cli" {
@@ -141,7 +168,41 @@ nonisolated struct WhisperTranscriber {
         return nil
     }
 
+    private func findBundledWhisperCLI() -> URL? {
+        findBundledExecutable(named: "whisper-cli")
+    }
+
+    private func findBundledExecutable(named command: String) -> URL? {
+        guard let bundledToolDirectory else { return nil }
+        var candidateDirectories = [bundledToolDirectory]
+        if let resourceURL = Bundle.main.resourceURL {
+            candidateDirectories.append(resourceURL.appendingPathComponent("Tools/bin", isDirectory: true))
+        }
+        candidateDirectories.append(Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/Tools/bin", isDirectory: true))
+        if let executableURL = Bundle.main.executableURL {
+            candidateDirectories.append(
+                executableURL
+                    .deletingLastPathComponent()
+                    .deletingLastPathComponent()
+                    .appendingPathComponent("Resources/Tools/bin", isDirectory: true)
+            )
+        }
+
+        var seen = Set<String>()
+        for directory in candidateDirectories where seen.insert(directory.standardizedFileURL.path).inserted {
+            let url = directory.appendingPathComponent(command)
+            if FileManager.default.isExecutableFile(atPath: url.path) {
+                return url
+            }
+        }
+        return nil
+    }
+
     private func findExecutable(named command: String) -> URL? {
+        if let bundledExecutable = findBundledExecutable(named: command) {
+            return bundledExecutable
+        }
+
         let pathValue = environment["PATH"] ?? "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
         let searchPaths = pathValue
             .split(separator: ":")
@@ -158,29 +219,7 @@ nonisolated struct WhisperTranscriber {
     }
 
     private func findMediumModel() -> URL? {
-        let explicitKeys = ["SMARTRECORD_WHISPER_MODEL", "WHISPER_CPP_MODEL", "WHISPER_MODEL"]
-        for key in explicitKeys {
-            if let path = environment[key], FileManager.default.fileExists(atPath: path) {
-                return URL(fileURLWithPath: path)
-            }
-        }
-
-        var candidates: [URL] = []
-        if let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            candidates.append(appSupport.appendingPathComponent("SmartRecord/Models/ggml-medium.bin"))
-            candidates.append(appSupport.appendingPathComponent("SmartRecord/Models/ggml-medium.en.bin"))
-        }
-        if let home = environment["HOME"] {
-            let base = URL(fileURLWithPath: home)
-            candidates.append(base.appendingPathComponent("Library/Application Support/SmartRecord/Models/ggml-medium.bin"))
-            candidates.append(base.appendingPathComponent(".cache/whisper.cpp/ggml-medium.bin"))
-        }
-        candidates += [
-            URL(fileURLWithPath: "/opt/homebrew/share/whisper-cpp/ggml-medium.bin"),
-            URL(fileURLWithPath: "/usr/local/share/whisper-cpp/ggml-medium.bin")
-        ]
-
-        return candidates.first { FileManager.default.fileExists(atPath: $0.path) }
+        WhisperModelManager.installedModelURL(environment: environment)
     }
 
     private func probe(_ executable: URL) -> Bool {
@@ -215,7 +254,7 @@ nonisolated struct WhisperTranscriber {
 
         if process.terminationStatus != 0 {
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let message = String(data: data, encoding: .utf8) ?? "未知 Whisper 错误"
+            let message = String(data: data, encoding: .utf8) ?? AppStrings.current(.unknownWhisperError)
             throw WhisperTranscriberError.failed(process.terminationStatus, message)
         }
     }

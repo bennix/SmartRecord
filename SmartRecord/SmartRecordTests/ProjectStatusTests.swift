@@ -45,4 +45,48 @@ struct ProjectStatusTests {
 
         #expect(project.status == .recorded)
     }
+
+    @Test func projectStoresAudioCaptureModeAsRawValue() {
+        let project = Project(rawVideoFilename: "legacy.mov", audioCaptureMode: .systemOnly)
+
+        #expect(project.audioCaptureMode == .systemOnly)
+        #expect(project.audioCaptureModeRawValue == AudioCaptureMode.systemOnly.rawValue)
+
+        project.audioCaptureMode = .none
+        #expect(project.audioCaptureModeRawValue == AudioCaptureMode.none.rawValue)
+        #expect(project.audioCaptureMode == .none)
+    }
+
+    @Test func invalidAudioCaptureModeFallsBackToBoth() {
+        let project = Project(rawVideoFilename: "legacy.mov")
+
+        project.audioCaptureModeRawValue = "unknown"
+
+        #expect(project.audioCaptureMode == .both)
+    }
+
+    @Test func projectStoresFrameRateAsRawValue() {
+        let project = Project(rawVideoFilename: "legacy.mov", frameRate: .fps10)
+
+        #expect(project.frameRate == .fps10)
+        #expect(project.frameRateRawValue == 10)
+
+        project.frameRate = .fps1
+        #expect(project.frameRateRawValue == 1)
+        #expect(project.frameRate == .fps1)
+    }
+
+    @Test func invalidFrameRateFallsBackToDefault() {
+        let project = Project(rawVideoFilename: "legacy.mov")
+
+        project.frameRateRawValue = 60
+
+        #expect(project.frameRate == .default)
+    }
+
+    @Test func projectStoresSubtitleGenerationPreference() {
+        let project = Project(rawVideoFilename: "legacy.mov", generatesSubtitles: false)
+
+        #expect(project.generatesSubtitles == false)
+    }
 }

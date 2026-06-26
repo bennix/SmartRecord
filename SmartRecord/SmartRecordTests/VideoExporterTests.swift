@@ -31,6 +31,50 @@ struct VideoExporterTests {
         #expect(codec == kCMVideoCodecType_H264)
     }
 
+    @Test func exportRespectsAudioCaptureModeNone() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SmartRecordVideoExporterTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let store = ProjectAssetStore(rootDirectory: root)
+        let bundle = try store.createProjectBundle()
+        try await makeScreenVideo(at: bundle.screenVideo)
+        try makeAudioFile(at: bundle.systemAudio, frequency: 440, amplitude: 0.08)
+        try makeAudioFile(at: bundle.microphoneAudio, frequency: 880, amplitude: 0.12)
+
+        try await VideoExporter().export(
+            bundle: bundle,
+            clickEvents: [],
+            audioMode: .none
+        )
+
+        let asset = AVURLAsset(url: bundle.finalVideo)
+        let audioTracks = try await asset.loadTracks(withMediaType: .audio)
+        #expect(audioTracks.isEmpty)
+    }
+
+    @Test func exportUsesOnlySelectedAudioTracks() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SmartRecordVideoExporterTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let store = ProjectAssetStore(rootDirectory: root)
+        let bundle = try store.createProjectBundle()
+        try await makeScreenVideo(at: bundle.screenVideo)
+        try makeAudioFile(at: bundle.systemAudio, frequency: 440, amplitude: 0.08)
+        try makeAudioFile(at: bundle.microphoneAudio, frequency: 880, amplitude: 0.12)
+
+        try await VideoExporter().export(
+            bundle: bundle,
+            clickEvents: [],
+            audioMode: .systemOnly
+        )
+
+        let asset = AVURLAsset(url: bundle.finalVideo)
+        let audioTracks = try await asset.loadTracks(withMediaType: .audio)
+        #expect(audioTracks.count == 1)
+    }
+
     private func makeScreenVideo(at url: URL) async throws {
         let width = 320
         let height = 180

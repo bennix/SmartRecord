@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SmartRecord - macOS screen recorder</title>
+  <meta name="description" content="SmartRecord records screen, system audio, microphone audio, SmartFocus zoom, H.264 MP4, and local Whisper VTT subtitles on macOS.">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f8fa;
+      --panel: #ffffff;
+      --ink: #18212b;
+      --muted: #66727f;
+      --line: #dfe7ee;
+      --blue: #0b65c2;
+      --green: #2fbf64;
+      --orange: #ff8a2a;
+      --shadow: 0 24px 70px rgba(22, 42, 68, 0.14);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(11, 101, 194, 0.14), transparent 34rem),
+        linear-gradient(135deg, #ffffff 0%, var(--bg) 60%, #eef6f9 100%);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      font-size: 18px;
+      line-height: 1.55;
+    }
+
+    a {
+      color: inherit;
+    }
+
+    .shell {
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 28px 0;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-weight: 800;
+      font-size: 22px;
+    }
+
+    .brand img {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+    }
+
+    nav {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    nav a {
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      text-decoration: none;
+      color: var(--muted);
+      font-size: 15px;
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(540px, 1.1fr);
+      gap: 44px;
+      align-items: center;
+      padding: 46px 0 70px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(48px, 7vw, 86px);
+      line-height: 0.94;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      margin: 24px 0 0;
+      color: var(--muted);
+      font-size: 22px;
+      max-width: 680px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-top: 30px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      min-height: 48px;
+      padding: 12px 18px;
+      border-radius: 10px;
+      font-weight: 750;
+      text-decoration: none;
+      border: 1px solid var(--line);
+      background: var(--panel);
+    }
+
+    .button.primary {
+      color: white;
+      border-color: var(--blue);
+      background: var(--blue);
+    }
+
+    .meta {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .screenshot {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      background: var(--panel);
+    }
+
+    .screenshot img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      padding: 10px 0 66px;
+    }
+
+    .card, .language {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.84);
+      box-shadow: 0 14px 40px rgba(22, 42, 68, 0.08);
+    }
+
+    .card {
+      padding: 22px;
+    }
+
+    .card strong {
+      display: block;
+      font-size: 21px;
+      margin-bottom: 8px;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .language {
+      margin-bottom: 18px;
+      padding: 26px;
+    }
+
+    .language h2 {
+      margin: 0 0 10px;
+      font-size: 28px;
+    }
+
+    .language p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    footer {
+      padding: 36px 0 48px;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    @media (max-width: 920px) {
+      .hero {
+        grid-template-columns: 1fr;
+      }
+
+      .feature-grid {
+        grid-template-columns: 1fr;
+      }
+
+      header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      nav {
+        justify-content: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <a class="brand" href="#top" aria-label="SmartRecord home">
+        <img src="assets/app-icon.png" alt="">
+        <span>SmartRecord</span>
+      </a>
+      <nav aria-label="Languages">
+        <a href="#en">English</a>
+        <a href="#zh">中文</a>
+        <a href="#ja">日本語</a>
+        <a href="#fr">Français</a>
+        <a href="#de">Deutsch</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <div>
+          <h1 id="hero-title">SmartRecord</h1>
+          <p class="lead">A focused macOS recorder for screen, system audio, microphone narration, SmartFocus zoom, H.264 MP4 export, and local Whisper VTT subtitles.</p>
+          <div class="actions">
+            <a class="button primary" href="https://github.com/bennix/SmartRecord/raw/master/releases/SmartRecord-1.03.dmg">Download DMG</a>
+            <a class="button" href="https://github.com/bennix/SmartRecord">View source</a>
+          </div>
+          <p class="meta">Version 1.03. Requires macOS with ScreenCaptureKit support.</p>
+        </div>
+        <figure class="screenshot">
+          <img src="assets/smartrecord-ui.png" alt="SmartRecord macOS interface with recording controls and project list">
+        </figure>
+      </section>
+
+      <section class="feature-grid" aria-label="Core features">
+        <article class="card">
+          <strong>Complete capture</strong>
+          <p>Record the display, microphone, system audio, or any selected audio combination.</p>
+        </article>
+        <article class="card">
+          <strong>SmartFocus</strong>
+          <p>Mouse-click focus zoom highlights the region being explained, then returns smoothly.</p>
+        </article>
+        <article class="card">
+          <strong>Local subtitles</strong>
+          <p>Use the local Whisper medium model to generate WebVTT subtitle files after recording.</p>
+        </article>
+      </section>
+
+      <section aria-label="Multilingual introduction">
+        <article class="language" id="en" lang="en">
+          <h2>English</h2>
+          <p>SmartRecord is a macOS screen recording app for tutorials, demos, and product walkthroughs. It captures screen video, microphone narration, system audio, and mouse focus events, then exports an H.264 MP4. You can optionally generate VTT subtitles locally with the Whisper medium model.</p>
+        </article>
+
+        <article class="language" id="zh" lang="zh-Hans">
+          <h2>简体中文</h2>
+          <p>SmartRecord 是一款 macOS 录屏工具，适合制作教程、产品演示和操作说明。它可以录制屏幕、麦克风、系统声音和鼠标焦点事件，并导出 H.264 MP4 视频。你也可以使用本地 Whisper medium 模型在后期生成 VTT 字幕文件。</p>
+        </article>
+
+        <article class="language" id="ja" lang="ja">
+          <h2>日本語</h2>
+          <p>SmartRecord は、チュートリアル、デモ、製品紹介に向いた macOS 用スクリーンレコーダーです。画面、マイク音声、システム音声、マウス操作のフォーカス情報を記録し、H.264 MP4 として書き出します。ローカルの Whisper medium モデルで VTT 字幕を後から生成できます。</p>
+        </article>
+
+        <article class="language" id="fr" lang="fr">
+          <h2>Français</h2>
+          <p>SmartRecord est une application macOS pour enregistrer des tutoriels, des démonstrations et des présentations produit. Elle capture l'écran, le microphone, l'audio système et les événements de focus de la souris, puis exporte une vidéo MP4 H.264. Les sous-titres VTT peuvent être générés localement avec le modèle Whisper medium.</p>
+        </article>
+
+        <article class="language" id="de" lang="de">
+          <h2>Deutsch</h2>
+          <p>SmartRecord ist ein macOS-Bildschirmrekorder für Tutorials, Demos und Produktvorführungen. Die App nimmt Bildschirm, Mikrofon, Systemaudio und Maus-Fokusereignisse auf und exportiert ein H.264-MP4. Optional können VTT-Untertitel lokal mit dem Whisper-medium-Modell erzeugt werden.</p>
+        </article>
+      </section>
+    </main>
+
+    <footer>
+      <p>Support: <a href="mailto:mavdevsh@gmail.com">mavdevsh@gmail.com</a>. User recording projects are stored in the visible Movies folder: <code>~/Movies/SmartRecord/Projects</code>.</p>
+    </footer>
+  </div>
+</body>
+</html>

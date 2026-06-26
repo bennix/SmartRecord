@@ -80,6 +80,7 @@
 				937E0F9D2FE0C204009BDA78 /* Sources */,
 				937E0F9E2FE0C204009BDA78 /* Frameworks */,
 				937E0F9F2FE0C204009BDA78 /* Resources */,
+				93B7E2A72FE1A8C3009BDA78 /* Bundle CLI Tools */,
 			);
 			buildRules = (
 			);
@@ -173,6 +174,74 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		93B7E2A72FE1A8C3009BDA78 /* Bundle CLI Tools */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/Scripts/BundleCLITools.sh",
+				"$(SRCROOT)/SmartRecord/Tool.entitlements",
+				"$(SRCROOT)/Vendor/Whisper/bin/whisper-cli",
+				"$(SRCROOT)/Vendor/Whisper/lib/libggml-base.0.dylib",
+				"$(SRCROOT)/Vendor/Whisper/lib/libggml-blas.0.dylib",
+				"$(SRCROOT)/Vendor/Whisper/lib/libggml-cpu.0.dylib",
+				"$(SRCROOT)/Vendor/Whisper/lib/libggml-metal.0.dylib",
+				"$(SRCROOT)/Vendor/Whisper/lib/libggml.0.dylib",
+				"$(SRCROOT)/Vendor/Whisper/lib/libwhisper.1.dylib",
+				"$(SRCROOT)/Vendor/FFmpeg/bin/ffmpeg",
+				"$(SRCROOT)/Vendor/FFmpeg/lib/libSvtAv1Enc.4.dylib",
+				"$(SRCROOT)/Vendor/FFmpeg/lib/libavcodec.62.dylib",
+				"$(SRCROOT)/Vendor/FFmpeg/lib/libavdevice.62.dylib",
+				"$(SRCROOT)/Vendor/FFmpeg/lib/libavfilter.11.dylib",
+				"$(SRCROOT)/Vendor/FFmpeg/lib/libavformat.62.dylib",
+				"$(SRCROOT)/Vendor/FFmpeg/lib/libavutil.60.dylib",
+				"$(SRCROOT)/Vendor/FFmpeg/lib/libdav1d.7.dylib",
+				"$(SRCROOT)/Vendor/FFmpeg/lib/libmp3lame.0.dylib",
+				"$(SRCROOT)/Vendor/FFmpeg/lib/libopus.0.dylib",
+				"$(SRCROOT)/Vendor/FFmpeg/lib/libswresample.6.dylib",
+				"$(SRCROOT)/Vendor/FFmpeg/lib/libswscale.9.dylib",
+				"$(SRCROOT)/Vendor/FFmpeg/lib/libvpx.11.dylib",
+				"$(SRCROOT)/Vendor/FFmpeg/lib/libx264.165.dylib",
+				"$(SRCROOT)/Vendor/FFmpeg/lib/libx265.215.dylib",
+			);
+			name = "Bundle CLI Tools";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/bin/whisper-cli",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/lib/libggml-base.0.dylib",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/lib/libggml-blas.0.dylib",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/lib/libggml-cpu.0.dylib",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/lib/libggml-metal.0.dylib",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/lib/libggml.0.dylib",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/lib/libwhisper.1.dylib",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/bin/ffmpeg",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/lib/libSvtAv1Enc.4.dylib",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/lib/libavcodec.62.dylib",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/lib/libavdevice.62.dylib",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/lib/libavfilter.11.dylib",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/lib/libavformat.62.dylib",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/lib/libavutil.60.dylib",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/lib/libdav1d.7.dylib",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/lib/libmp3lame.0.dylib",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/lib/libopus.0.dylib",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/lib/libswresample.6.dylib",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/lib/libswscale.9.dylib",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/lib/libvpx.11.dylib",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/lib/libx264.165.dylib",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Tools/lib/libx265.215.dylib",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/sh \"${SRCROOT}/Scripts/BundleCLITools.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		937E0F9D2FE0C204009BDA78 /* Sources */ = {
@@ -328,20 +397,24 @@
 				CODE_SIGN_ENTITLEMENTS = SmartRecord/SmartRecord.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 5N66S29EK2;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "SmartRecord can record microphone audio alongside screen recordings when you allow access.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "SmartRecord 使用麦克风录制讲解音频。";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.05;
 				PRODUCT_BUNDLE_IDENTIFIER = fudan.miniS.SmartRecord;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -362,20 +435,24 @@
 				CODE_SIGN_ENTITLEMENTS = SmartRecord/SmartRecord.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 5N66S29EK2;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "SmartRecord can record microphone audio alongside screen recordings when you allow access.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "SmartRecord 使用麦克风录制讲解音频。";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.05;
 				PRODUCT_BUNDLE_IDENTIFIER = fudan.miniS.SmartRecord;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -393,7 +470,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 5N66S29EK2;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
@@ -413,7 +490,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 5N66S29EK2;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;

@@ -17,4 +17,10 @@ struct RecordingClockTests {
         let clock = RecordingClock(startTicks: 2000, ticksPerSecond: 1_000_000)
         #expect(clock.elapsed(atTicks: 1000) == 0)
     }
+
+    @Test func elapsedUsesEventTimestampNanoseconds() {
+        let clock = RecordingClock(startTicks: 1_000_000, ticksPerSecond: 1_000_000)
+
+        #expect(abs(clock.elapsed(atEventTimestampNanoseconds: 1_500_000_000) - 0.5) < 1e-9)
+    }
 }

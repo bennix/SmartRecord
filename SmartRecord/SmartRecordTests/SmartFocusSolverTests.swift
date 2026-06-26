@@ -43,4 +43,20 @@ struct SmartFocusSolverTests {
 
         #expect(solver.sample(at: 1.2).zoom <= 2.4)
     }
+
+    @Test func closeClicksDoNotMoveFocusBeforeSecondClick() {
+        let solver = SmartFocusSolver(
+            events: [
+                SmartFocusEvent(time: 1.0, nx: 0.2, ny: 0.3),
+                SmartFocusEvent(time: 1.8, nx: 0.8, ny: 0.7)
+            ],
+            duration: 5,
+            zoomScale: 1.8
+        )
+
+        #expect(solver.sample(at: 1.4).nx == 0.2)
+        #expect(solver.sample(at: 1.4).ny == 0.3)
+        #expect(solver.sample(at: 1.9).nx == 0.8)
+        #expect(solver.sample(at: 1.9).ny == 0.7)
+    }
 }

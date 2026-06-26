@@ -11,13 +11,13 @@ enum VideoExporterError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingScreenVideo:
-            return "缺少 screen.mov，无法生成最终视频。"
+            return AppStrings.current(.missingScreenVideo)
         case .noVideoTrack:
-            return "screen.mov 中没有可用视频轨道。"
+            return AppStrings.current(.noVideoTrack)
         case .exportUnavailable:
-            return "当前系统无法创建视频导出任务。"
+            return AppStrings.current(.exportUnavailable)
         case .exportFailed(let message):
-            return "最终视频导出失败：\(message)"
+            return AppStrings.current.exportFailed(message)
         }
     }
 }
@@ -27,12 +27,14 @@ nonisolated struct VideoRenderOptions {
     let zoomScale: Double
     let microphoneGain: Float
     let systemGain: Float
+    let frameRate: RecordingFrameRate
 
     static let defaults = VideoRenderOptions(
         zoomEnabled: true,
         zoomScale: 1.6,
         microphoneGain: 0.70,
-        systemGain: 0.45
+        systemGain: 0.45,
+        frameRate: .default
     )
 }
 
@@ -40,6 +42,7 @@ nonisolated struct VideoExporter {
     func export(
         bundle: ProjectAssetBundle,
         clickEvents: [SmartFocusEvent],
+        audioMode: AudioCaptureMode = .both,
         options: VideoRenderOptions = .defaults
     ) async throws {
         guard FileManager.default.fileExists(atPath: bundle.screenVideo.path) else {
@@ -71,6 +74,7 @@ nonisolated struct VideoExporter {
             to: composition,
             duration: duration,
             bundle: bundle,
+            audioMode: audioMode,
             options: options
         )
 
@@ -88,7 +92,7 @@ nonisolated struct VideoExporter {
             request.finish(with: image, context: nil)
         }
         videoComposition.renderSize = renderSize
-        videoComposition.frameDuration = CMTime(value: 1, timescale: 60)
+        videoComposition.frameDuration = options.frameRate.frameDuration
 
         let audioMix = AVMutableAudioMix()
         audioMix.inputParameters = audioMixParameters
@@ -117,17 +121,20 @@ nonisolated struct VideoExporter {
         to composition: AVMutableComposition,
         duration: CMTime,
         bundle: ProjectAssetBundle,
+        audioMode: AudioCaptureMode,
         options: VideoRenderOptions
     ) async throws -> [AVAudioMixInputParameters] {
         var parameters: [AVAudioMixInputParameters] = []
 
-        if let systemTrack = try await addAudioTrack(from: bundle.systemAudio, to: composition, duration: duration) {
+        if audioMode.capturesSystemAudio,
+           let systemTrack = try await addAudioTrack(from: bundle.systemAudio, to: composition, duration: duration) {
             let input = AVMutableAudioMixInputParameters(track: systemTrack)
             input.setVolume(options.systemGain, at: .zero)
             parameters.append(input)
         }
 
-        if let microphoneTrack = try await addAudioTrack(from: bundle.microphoneAudio, to: composition, duration: duration) {
+        if audioMode.capturesMicrophone,
+           let microphoneTrack = try await addAudioTrack(from: bundle.microphoneAudio, to: composition, duration: duration) {
             let input = AVMutableAudioMixInputParameters(track: microphoneTrack)
             input.setVolume(options.microphoneGain, at: .zero)
             parameters.append(input)
@@ -162,7 +169,7 @@ nonisolated struct VideoExporter {
     }
 
     private static func errorSummary(_ error: Error?) -> String {
-        guard let error else { return "未知错误" }
+        guard let error else { return AppStrings.current(.unknownError) }
         let nsError = error as NSError
         return "\(nsError.domain) \(nsError.code)：\(nsError.localizedDescription)"
     }

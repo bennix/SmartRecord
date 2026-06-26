@@ -3,6 +3,13 @@ import Testing
 @testable import SmartRecord
 
 struct ProjectAssetStoreTests {
+    @Test func defaultProjectDirectoryIsUserVisibleMoviesFolder() {
+        let store = ProjectAssetStore()
+        let movies = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask)[0]
+
+        #expect(store.rootDirectory == movies.appendingPathComponent("SmartRecord/Projects", isDirectory: true))
+    }
+
     @Test func createsProjectDirectoryWithCanonicalAssetURLs() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("SmartRecordAssetStoreTests-\(UUID().uuidString)", isDirectory: true)

@@ -67,7 +67,7 @@ nonisolated struct ProjectAssetStore {
     }
 
     private static var defaultRootDirectory: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("SmartRecord/Projects", isDirectory: true)
     }
 }
