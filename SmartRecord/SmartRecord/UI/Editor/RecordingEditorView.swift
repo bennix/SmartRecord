@@ -34,6 +34,7 @@ struct RecordingEditorView: View {
     @State private var captionLanguage = CaptionLanguage.defaults[0]
     @State private var preparedTimeline: EditTimeline?
     @State private var isPreviewLoaded = false
+    @State private var previewErrorMessage: String?
 
     init(project: Project, coordinator: RecordingCoordinator, onClose: (() -> Void)? = nil) {
         self.project = project
@@ -140,8 +141,15 @@ struct RecordingEditorView: View {
                 .fill(Color.black)
                 .aspectRatio(16 / 9, contentMode: .fit)
                 .overlay {
-                    if isPreviewLoaded {
-                        VideoPlayer(player: player)
+                    if let previewErrorMessage {
+                        ContentUnavailableView(
+                            "视频预览加载失败",
+                            systemImage: "exclamationmark.triangle",
+                            description: Text(previewErrorMessage)
+                        )
+                        .foregroundStyle(.white)
+                    } else if isPreviewLoaded {
+                        EditorPlayerView(player: player)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                     } else if bundle != nil {
                         VStack(spacing: 14) {
@@ -210,9 +218,19 @@ struct RecordingEditorView: View {
     }
 
     private func loadPreviewVideo() {
-        guard let bundle else { return }
-        let url = FileManager.default.fileExists(atPath: bundle.finalVideo.path) ? bundle.finalVideo : bundle.screenVideo
-        player.replaceCurrentItem(with: AVPlayerItem(url: url))
+        guard let bundle else {
+            previewErrorMessage = "找不到项目录制目录。"
+            return
+        }
+        let url = bundle.screenVideo
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            previewErrorMessage = "找不到原始屏幕录制文件：\(url.lastPathComponent)"
+            return
+        }
+        previewErrorMessage = nil
+        let item = AVPlayerItem(url: url)
+        player.replaceCurrentItem(with: item)
+        player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
         isPreviewLoaded = true
     }
 
@@ -233,5 +251,23 @@ struct RecordingEditorView: View {
         let minutes = Int(time) / 60
         let seconds = Int(time) % 60
         return String(format: "%02d:%02d", minutes, seconds)
+    }
+}
+
+private struct EditorPlayerView: NSViewRepresentable {
+    let player: AVPlayer
+
+    func makeNSView(context: Context) -> AVPlayerView {
+        let view = AVPlayerView()
+        view.controlsStyle = .floating
+        view.showsFullScreenToggleButton = true
+        view.player = player
+        return view
+    }
+
+    func updateNSView(_ view: AVPlayerView, context: Context) {
+        if view.player !== player {
+            view.player = player
+        }
     }
 }
