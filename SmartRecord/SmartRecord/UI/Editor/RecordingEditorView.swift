@@ -38,6 +38,7 @@ struct RecordingEditorView: View {
     @State private var previewImage: NSImage?
     @State private var previewErrorMessage: String?
     @State private var previewNoticeMessage: String?
+    @State private var previewRequestID = UUID()
 
     init(project: Project, coordinator: RecordingCoordinator, onClose: (() -> Void)? = nil) {
         self.project = project
@@ -316,17 +317,34 @@ struct RecordingEditorView: View {
     }
 
     private func loadPreviewFrame(from url: URL) {
+        let requestID = UUID()
+        previewRequestID = requestID
         previewImage = nil
         isPreviewFrameLoading = true
-        Task {
+
+        DispatchQueue.global(qos: .userInitiated).async {
             do {
-                let image = try await EditorPreviewFrameLoader.image(from: url)
-                previewImage = image
-                previewErrorMessage = nil
-                previewNoticeMessage = nil
+                let data = try EditorPreviewFrameLoader.imageData(from: url)
+                Task { @MainActor in
+                    guard previewRequestID == requestID else { return }
+                    previewImage = NSImage(data: data)
+                    previewErrorMessage = nil
+                    previewNoticeMessage = nil
+                    isPreviewFrameLoading = false
+                }
             } catch {
-                previewNoticeMessage = "原始录屏存在，但应用内预览暂时无法读取画面；可用系统播放器打开。"
+                Task { @MainActor in
+                    guard previewRequestID == requestID else { return }
+                    previewNoticeMessage = "原始录屏存在，但应用内预览暂时无法读取画面；可用系统播放器打开。"
+                    isPreviewFrameLoading = false
+                }
             }
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            guard previewRequestID == requestID, isPreviewFrameLoading else { return }
+            previewNoticeMessage = "原始录屏存在，预览仍在后台读取；你可以继续编辑或用系统播放器打开。"
             isPreviewFrameLoading = false
         }
     }
@@ -373,30 +391,7 @@ struct RecordingEditorView: View {
 }
 
 private nonisolated enum EditorPreviewFrameLoader {
-    static func image(from url: URL) async throws -> NSImage {
-        let data = try await withThrowingTaskGroup(of: Data.self) { group in
-            group.addTask {
-                try await generateImageData(from: url)
-            }
-            group.addTask {
-                try await Task.sleep(for: .seconds(2))
-                throw CocoaError(.userCancelled)
-            }
-
-            guard let data = try await group.next() else {
-                throw CocoaError(.fileReadUnknown)
-            }
-            group.cancelAll()
-            return data
-        }
-
-        guard let image = NSImage(data: data) else {
-            throw CocoaError(.fileReadCorruptFile)
-        }
-        return image
-    }
-
-    private static func generateImageData(from url: URL) async throws -> Data {
+    static func imageData(from url: URL) throws -> Data {
         let asset = AVURLAsset(url: url)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
