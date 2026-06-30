@@ -39,6 +39,7 @@ struct RecordingEditorView: View {
     @State private var isPreviewFrameLoading = false
     @State private var previewImage: NSImage?
     @State private var previewErrorMessage: String?
+    @State private var previewNoticeMessage: String?
 
     init(project: Project, coordinator: RecordingCoordinator, onClose: (() -> Void)? = nil) {
         self.project = project
@@ -60,6 +61,7 @@ struct RecordingEditorView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .padding(.top, 44)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
@@ -164,14 +166,8 @@ struct RecordingEditorView: View {
                             .background(Color.black)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                     } else if isPreviewFrameLoading {
-                        VStack(spacing: 12) {
-                            Image(systemName: "photo.on.rectangle.angled")
-                                .font(.system(size: 46, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.82))
-                            Text("正在读取视频首帧")
-                                .font(.title3.weight(.semibold))
-                                .foregroundStyle(.white)
-                        }
+                        EditorPlayerView(player: player)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
                     } else if bundle != nil {
                         VStack(spacing: 14) {
                             Image(systemName: "play.rectangle.fill")
@@ -214,6 +210,26 @@ struct RecordingEditorView: View {
             .padding(10)
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
             .padding(14)
+
+            if let previewNoticeMessage {
+                HStack(spacing: 8) {
+                    Image(systemName: "info.circle")
+                    Text(previewNoticeMessage)
+                    Button {
+                        isPlayerVisible = true
+                        player.play()
+                    } label: {
+                        Label("直接播放", systemImage: "play.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+                .font(.body)
+                .padding(10)
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                .padding(14)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
         }
     }
 
@@ -283,16 +299,19 @@ struct RecordingEditorView: View {
     private func loadPreviewVideo() {
         guard let bundle else {
             previewErrorMessage = "找不到项目录制目录。"
+            previewNoticeMessage = nil
             isPreviewFrameLoading = false
             return
         }
         let url = bundle.screenVideo
         guard FileManager.default.fileExists(atPath: url.path) else {
             previewErrorMessage = "找不到原始屏幕录制文件：\(url.lastPathComponent)"
+            previewNoticeMessage = nil
             isPreviewFrameLoading = false
             return
         }
         previewErrorMessage = nil
+        previewNoticeMessage = nil
         let item = AVPlayerItem(url: url)
         player.replaceCurrentItem(with: item)
         player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
@@ -313,8 +332,10 @@ struct RecordingEditorView: View {
                 let image = try await EditorPreviewFrameLoader.image(from: url)
                 previewImage = image
                 previewErrorMessage = nil
+                previewNoticeMessage = nil
             } catch {
-                previewErrorMessage = "原始录屏存在，但无法读取首帧：\(error.localizedDescription)"
+                previewNoticeMessage = "首帧预览读取较慢，已切换为播放器预览。"
+                isPlayerVisible = true
             }
             isPreviewFrameLoading = false
         }
@@ -328,6 +349,7 @@ struct RecordingEditorView: View {
         isPreviewFrameLoading = false
         previewImage = nil
         previewErrorMessage = nil
+        previewNoticeMessage = nil
     }
 
     private func saveCopy() {
@@ -363,8 +385,26 @@ struct RecordingEditorView: View {
     }
 }
 
-private enum EditorPreviewFrameLoader {
+private nonisolated enum EditorPreviewFrameLoader {
     static func image(from url: URL) async throws -> NSImage {
+        try await withThrowingTaskGroup(of: NSImage.self) { group in
+            group.addTask {
+                try await generateImage(from: url)
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(2))
+                throw CocoaError(.userCancelled)
+            }
+
+            guard let image = try await group.next() else {
+                throw CocoaError(.fileReadUnknown)
+            }
+            group.cancelAll()
+            return image
+        }
+    }
+
+    private static func generateImage(from url: URL) async throws -> NSImage {
         let asset = AVURLAsset(url: url)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
