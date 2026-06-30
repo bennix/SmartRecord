@@ -5,6 +5,7 @@ struct ContentView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Project.createdAt, order: .reverse) private var projects: [Project]
     @State private var coordinator = RecordingCoordinator()
+    @State private var editorProject: Project?
     @AppStorage(AppLanguageStore.userDefaultsKey) private var languageRawValue = AppLanguage.zhHans.rawValue
 
     private var language: AppLanguage {
@@ -27,6 +28,9 @@ struct ContentView: View {
         .background(appBackground)
         .onChange(of: languageRawValue) { _, _ in
             coordinator.refreshLocalizedText()
+        }
+        .sheet(item: $editorProject) { project in
+            RecordingEditorView(project: project, coordinator: coordinator)
         }
     }
 
@@ -393,6 +397,10 @@ struct ContentView: View {
                     rowAction(t(.play), icon: "play.fill") {
                         coordinator.open(project: project)
                     }
+                    rowAction("编辑", icon: "slider.horizontal.3") {
+                        _ = project.ensureEditTimeline()
+                        editorProject = project
+                    }
                     rowAction("Finder", icon: "folder") {
                         coordinator.reveal(project: project)
                     }
@@ -436,6 +444,12 @@ struct ContentView: View {
         .contextMenu {
             Button { coordinator.open(project: project) } label: {
                 Label(t(.playRecording), systemImage: "play.rectangle")
+            }
+            Button {
+                _ = project.ensureEditTimeline()
+                editorProject = project
+            } label: {
+                Label("编辑", systemImage: "slider.horizontal.3")
             }
             Button { coordinator.regenerateVideo(for: project, context: context) } label: {
                 Label(t(.regenerateVideo), systemImage: "arrow.triangle.2.circlepath")

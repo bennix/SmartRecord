@@ -41,6 +41,15 @@ final class Project {
         self.editTimeline = EditTimeline(sourceDuration: duration)
     }
 
+    func ensureEditTimeline() -> EditTimeline {
+        if let editTimeline {
+            return editTimeline
+        }
+        let timeline = EditTimeline(sourceDuration: duration)
+        editTimeline = timeline
+        return timeline
+    }
+
     var status: ProjectStatus {
         get { ProjectStatus(rawValue: statusRawValue) ?? .recorded }
         set { statusRawValue = newValue.rawValue }

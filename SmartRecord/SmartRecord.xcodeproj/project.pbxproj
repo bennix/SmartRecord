@@ -76,11 +76,11 @@
 		937E0FA02FE0C204009BDA78 /* SmartRecord */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 937E0FAE2FE0C205009BDA78 /* Build configuration list for PBXNativeTarget "SmartRecord" */;
-				buildPhases = (
-					937E0F9D2FE0C204009BDA78 /* Sources */,
-					937E0F9E2FE0C204009BDA78 /* Frameworks */,
-					937E0F9F2FE0C204009BDA78 /* Resources */,
-				);
+			buildPhases = (
+				937E0F9D2FE0C204009BDA78 /* Sources */,
+				937E0F9E2FE0C204009BDA78 /* Frameworks */,
+				937E0F9F2FE0C204009BDA78 /* Resources */,
+			);
 			buildRules = (
 			);
 			dependencies = (
@@ -328,7 +328,7 @@
 				CODE_SIGN_ENTITLEMENTS = SmartRecord/SmartRecord.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 5N66S29EK2;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -340,11 +340,12 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "SmartRecord 使用麦克风录制讲解音频。";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "SmartRecord 使用 Apple 本地语音识别，将你录制的音频生成项目内可编辑字幕。";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.06;
+				MARKETING_VERSION = 1.07;
 				PRODUCT_BUNDLE_IDENTIFIER = fudan.miniS.SmartRecord;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -365,7 +366,7 @@
 				CODE_SIGN_ENTITLEMENTS = SmartRecord/SmartRecord.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = 5N66S29EK2;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -377,11 +378,12 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "SmartRecord 使用麦克风录制讲解音频。";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "SmartRecord 使用 Apple 本地语音识别，将你录制的音频生成项目内可编辑字幕。";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.06;
+				MARKETING_VERSION = 1.07;
 				PRODUCT_BUNDLE_IDENTIFIER = fudan.miniS.SmartRecord;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;

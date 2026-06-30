@@ -175,7 +175,7 @@ nonisolated struct VideoExporter {
     }
 }
 
-private func render(sourceImage: CIImage, sample: SmartFocusSample) -> CIImage {
+nonisolated func render(sourceImage: CIImage, sample: SmartFocusSample) -> CIImage {
     let extent = sourceImage.extent
     let zoom = max(CGFloat(sample.zoom), 1.0)
     guard zoom > 1.001 else {

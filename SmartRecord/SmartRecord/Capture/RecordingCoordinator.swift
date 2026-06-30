@@ -1,6 +1,7 @@
 import AppKit
 import SwiftData
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor
 @Observable
@@ -191,8 +192,67 @@ final class RecordingCoordinator {
     }
 
     func regenerateVideo(for project: Project, context: ModelContext) {
+        _ = project.ensureEditTimeline()
         Task { @MainActor in
             await postProcessor.renderFinalVideo(project: project, context: context)
+        }
+    }
+
+    func exportEditedVideoCopy(for project: Project, context: ModelContext, destination: URL) {
+        _ = project.ensureEditTimeline()
+        Task { @MainActor in
+            do {
+                try await postProcessor.exportCopy(project: project, context: context, destination: destination)
+                try? context.save()
+            } catch {
+                failureMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func generateLocalCaptions(for project: Project, context: ModelContext, language: CaptionLanguage) {
+        guard let bundle = recordingBundle(for: project) else { return }
+        let timeline = project.ensureEditTimeline()
+        Task { @MainActor in
+            do {
+                let captions = try await LocalSpeechCaptioner().transcribe(
+                    bundle: bundle,
+                    audioMode: project.audioCaptureMode,
+                    language: language
+                )
+                timeline.captions = captions
+                try? context.save()
+            } catch {
+                failureMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func importAnnotationImage(for project: Project, context: ModelContext, at time: Double) {
+        guard !project.assetDirectoryName.isEmpty else { return }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.png, .jpeg, .tiff, .gif]
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            let filename = try assetStore.copyAnnotationAsset(from: url, into: project.assetDirectoryName)
+            let timeline = project.ensureEditTimeline()
+            timeline.annotations.append(
+                AnnotationItem(
+                    kind: .image,
+                    startTime: time,
+                    endTime: min(time + 4, max(timeline.duration, time + 4)),
+                    normalizedX: 0.62,
+                    normalizedY: 0.62,
+                    normalizedWidth: 0.24,
+                    normalizedHeight: 0.24,
+                    assetFilename: filename
+                )
+            )
+            try? context.save()
+        } catch {
+            failureMessage = error.localizedDescription
         }
     }
 

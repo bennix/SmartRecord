@@ -6,13 +6,16 @@ import SwiftData
 final class PostProcessingCoordinator {
     private let assetStore: ProjectAssetStore
     private let videoExporter: VideoExporter
+    private let editedVideoExporter: EditedVideoExporter
 
     init(
         assetStore: ProjectAssetStore = ProjectAssetStore(),
-        videoExporter: VideoExporter = VideoExporter()
+        videoExporter: VideoExporter = VideoExporter(),
+        editedVideoExporter: EditedVideoExporter = EditedVideoExporter()
     ) {
         self.assetStore = assetStore
         self.videoExporter = videoExporter
+        self.editedVideoExporter = editedVideoExporter
     }
 
     func process(project: Project, context: ModelContext) async {
@@ -20,34 +23,74 @@ final class PostProcessingCoordinator {
     }
 
     func renderFinalVideo(project: Project, context: ModelContext) async {
-        guard let bundle = try? assetStore.bundle(named: project.assetDirectoryName) else {
-            project.status = .videoFailed
-            save(context)
-            return
-        }
-
-        project.status = .renderingVideo
-        save(context)
-
         do {
-            try await videoExporter.export(
-                bundle: bundle,
-                clickEvents: smartFocusEvents(for: project),
-                audioMode: project.audioCaptureMode,
-                options: renderOptions(for: project)
-            )
-            project.status = .completed
-            save(context)
+            try await export(project: project, context: context, destination: nil, updatesStatus: true)
         } catch {
             project.status = .videoFailed
             save(context)
         }
     }
 
+    func exportCopy(project: Project, context: ModelContext, destination: URL) async throws {
+        try await export(project: project, context: context, destination: destination, updatesStatus: false)
+    }
+
+    private func export(project: Project, context: ModelContext, destination: URL?, updatesStatus: Bool) async throws {
+        guard let bundle = try? assetStore.bundle(named: project.assetDirectoryName) else {
+            if updatesStatus {
+                project.status = .videoFailed
+                save(context)
+            }
+            throw VideoExporterError.missingScreenVideo
+        }
+
+        if updatesStatus {
+            project.status = .renderingVideo
+            save(context)
+        }
+
+        do {
+            if let timeline = project.editTimeline {
+                try await editedVideoExporter.export(
+                    bundle: bundle,
+                    timeline: timeline,
+                    clickEvents: smartFocusEvents(for: project),
+                    audioMode: project.audioCaptureMode,
+                    options: renderOptions(for: project),
+                    outputURL: destination
+                )
+            } else {
+                try await videoExporter.export(
+                    bundle: bundle,
+                    clickEvents: smartFocusEvents(for: project),
+                    audioMode: project.audioCaptureMode,
+                    options: renderOptions(for: project)
+                )
+                if let destination {
+                    if FileManager.default.fileExists(atPath: destination.path) {
+                        try FileManager.default.removeItem(at: destination)
+                    }
+                    try FileManager.default.copyItem(at: bundle.finalVideo, to: destination)
+                }
+            }
+            if updatesStatus {
+                project.status = .completed
+                save(context)
+            }
+        } catch {
+            if updatesStatus {
+                project.status = .videoFailed
+                save(context)
+            }
+            throw error
+        }
+    }
+
     private func renderOptions(for project: Project) -> VideoRenderOptions {
+        let includeSmartFocus = project.editTimeline?.exportSettings?.includeSmartFocus ?? true
         guard let settings = project.settings else {
             return VideoRenderOptions(
-                zoomEnabled: true,
+                zoomEnabled: includeSmartFocus,
                 zoomScale: 1.6,
                 microphoneGain: 0.70,
                 systemGain: 0.45,
@@ -56,7 +99,7 @@ final class PostProcessingCoordinator {
         }
         let mix = min(max(settings.micSystemMix, 0), 1)
         return VideoRenderOptions(
-            zoomEnabled: settings.zoomEnabled,
+            zoomEnabled: settings.zoomEnabled && includeSmartFocus,
             zoomScale: settings.zoomScale,
             microphoneGain: Float(0.25 + 0.65 * mix),
             systemGain: Float(0.25 + 0.55 * (1 - mix)),

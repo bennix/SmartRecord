@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-enum AnnotationKind: String, Codable, CaseIterable {
+enum AnnotationKind: String, Codable, CaseIterable, Sendable {
     case text
     case arrow
     case highlightRectangle

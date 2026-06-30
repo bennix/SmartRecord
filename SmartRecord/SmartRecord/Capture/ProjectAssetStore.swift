@@ -13,6 +13,7 @@ nonisolated struct ProjectAssetBundle: Equatable {
     var microphoneAudio: URL { directory.appendingPathComponent("microphone.m4a") }
     var events: URL { directory.appendingPathComponent("events.json") }
     var finalVideo: URL { directory.appendingPathComponent("final.mp4") }
+    var annotationAssetsDirectory: URL { directory.appendingPathComponent("AnnotationAssets", isDirectory: true) }
 }
 
 nonisolated struct ProjectAssetStore {
@@ -38,6 +39,16 @@ nonisolated struct ProjectAssetStore {
     func removeGeneratedOutputs(for directoryName: String) throws {
         let bundle = try bundle(named: directoryName)
         try removeIfPresent(bundle.finalVideo)
+    }
+
+    func copyAnnotationAsset(from sourceURL: URL, into directoryName: String) throws -> String {
+        let bundle = try bundle(named: directoryName)
+        try FileManager.default.createDirectory(at: bundle.annotationAssetsDirectory, withIntermediateDirectories: true)
+        let ext = sourceURL.pathExtension.isEmpty ? "png" : sourceURL.pathExtension
+        let filename = "\(UUID().uuidString).\(ext)"
+        let destination = bundle.annotationAssetsDirectory.appendingPathComponent(filename)
+        try FileManager.default.copyItem(at: sourceURL, to: destination)
+        return filename
     }
 
     func removeProject(named directoryName: String) throws {
