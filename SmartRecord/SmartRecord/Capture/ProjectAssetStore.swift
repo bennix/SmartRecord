@@ -41,6 +41,35 @@ nonisolated struct ProjectAssetStore {
         try removeIfPresent(bundle.finalVideo)
     }
 
+    func replaceScreenVideo(from sourceURL: URL, into directoryName: String) throws {
+        let bundle = try bundle(named: directoryName)
+        try removeIfPresent(bundle.screenVideo)
+        try FileManager.default.copyItem(at: sourceURL, to: bundle.screenVideo)
+        try removeIfPresent(bundle.finalVideo)
+    }
+
+    func writeSmartFocusLog(_ log: SmartFocusRecordingLog, into directoryName: String) throws {
+        let bundle = try bundle(named: directoryName)
+        let data = try JSONEncoder().encode(log)
+        try data.write(to: bundle.events, options: .atomic)
+    }
+
+    func readSmartFocusLog(from sourceURL: URL) throws -> SmartFocusRecordingLog {
+        let data = try Data(contentsOf: sourceURL)
+        let decoder = JSONDecoder()
+        if let log = try? decoder.decode(SmartFocusRecordingLog.self, from: data) {
+            return log
+        }
+        let clicks = try decoder.decode([SmartFocusClickRecord].self, from: data)
+        return SmartFocusRecordingLog(clicks: clicks, samples: [])
+    }
+
+    func replaceSmartFocusLog(from sourceURL: URL, into directoryName: String) throws -> SmartFocusRecordingLog {
+        let log = try readSmartFocusLog(from: sourceURL)
+        try writeSmartFocusLog(log, into: directoryName)
+        return log
+    }
+
     func copyAnnotationAsset(from sourceURL: URL, into directoryName: String) throws -> String {
         let bundle = try bundle(named: directoryName)
         try FileManager.default.createDirectory(at: bundle.annotationAssetsDirectory, withIntermediateDirectories: true)

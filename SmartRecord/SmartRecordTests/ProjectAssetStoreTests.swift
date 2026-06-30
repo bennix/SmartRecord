@@ -42,6 +42,43 @@ struct ProjectAssetStoreTests {
         #expect(!FileManager.default.fileExists(atPath: bundle.finalVideo.path))
     }
 
+    @Test func writesAndReadsSmartFocusLog() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SmartRecordAssetStoreTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let store = ProjectAssetStore(rootDirectory: root)
+        let bundle = try store.createProjectBundle()
+        let log = SmartFocusRecordingLog(
+            clicks: [SmartFocusClickRecord(time: 1.2, nx: 0.3, ny: 0.4)],
+            samples: [SmartFocusCursorRecord(time: 1.1, nx: 0.2, ny: 0.5, dragging: true)]
+        )
+
+        try store.writeSmartFocusLog(log, into: bundle.directoryName)
+        let decoded = try store.readSmartFocusLog(from: bundle.events)
+
+        #expect(decoded.clicks.count == 1)
+        #expect(decoded.samples.count == 1)
+        #expect(decoded.clicks[0].time == 1.2)
+        #expect(decoded.samples[0].dragging)
+    }
+
+    @Test func readsLegacyClickOnlySmartFocusLog() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SmartRecordAssetStoreTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let store = ProjectAssetStore(rootDirectory: root)
+        let bundle = try store.createProjectBundle()
+        try Data(#"[{"time":0.5,"nx":0.25,"ny":0.75}]"#.utf8).write(to: bundle.events)
+
+        let decoded = try store.readSmartFocusLog(from: bundle.events)
+
+        #expect(decoded.clicks.count == 1)
+        #expect(decoded.clicks[0].nx == 0.25)
+        #expect(decoded.samples.isEmpty)
+    }
+
     @Test func rejectsInvalidDirectoryNames() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("SmartRecordAssetStoreTests-\(UUID().uuidString)", isDirectory: true)

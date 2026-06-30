@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
@@ -140,6 +141,13 @@ final class RecordingCoordinator {
         project.cursorSamples = buffer.samples.map {
             CursorSample(time: $0.time, nx: $0.nx, ny: $0.ny, dragging: $0.dragging)
         }
+        try? assetStore.writeSmartFocusLog(
+            SmartFocusRecordingLog(
+                clicks: buffer.clicks.map { SmartFocusClickRecord(time: $0.time, nx: $0.nx, ny: $0.ny) },
+                samples: buffer.samples.map { SmartFocusCursorRecord(time: $0.time, nx: $0.nx, ny: $0.ny, dragging: $0.dragging) }
+            ),
+            into: result.bundle.directoryName
+        )
 
         var warnings: [ProjectWarning] = []
         if selectedAudioMode.capturesSystemAudio && !result.capturedSystemAudio {
@@ -189,6 +197,86 @@ final class RecordingCoordinator {
             ? bundle.finalVideo
             : bundle.screenVideo
         NSWorkspace.shared.open(url)
+    }
+
+    func openOriginalRecording(for project: Project) {
+        guard let bundle = recordingBundle(for: project) else { return }
+        NSWorkspace.shared.open(bundle.screenVideo)
+    }
+
+    @discardableResult
+    func importSourceVideo(for project: Project, context: ModelContext) async -> Bool {
+        guard !project.assetDirectoryName.isEmpty else { return false }
+
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.movie, .quickTimeMovie, .mpeg4Movie]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.message = "选择要用于编辑和渲染的原始录屏文件"
+        panel.prompt = "选择原始录屏"
+
+        guard panel.runModal() == .OK, let sourceURL = panel.url else { return false }
+        let hasAccess = sourceURL.startAccessingSecurityScopedResource()
+        defer {
+            if hasAccess {
+                sourceURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            let asset = AVURLAsset(url: sourceURL)
+            let duration = try await asset.load(.duration).seconds
+            try assetStore.replaceScreenVideo(from: sourceURL, into: project.assetDirectoryName)
+            project.rawVideoFilename = "screen.mov"
+            project.duration = max(0, duration.isFinite ? duration : 0)
+            project.editTimeline = EditTimeline(sourceDuration: project.duration)
+            try context.save()
+            failureMessage = nil
+            statusMessage = "已更新原始录屏"
+            return true
+        } catch {
+            failureMessage = "导入原始录屏失败：\(error.localizedDescription)"
+            return false
+        }
+    }
+
+    @discardableResult
+    func importSmartFocusLog(for project: Project, context: ModelContext) -> Bool {
+        guard !project.assetDirectoryName.isEmpty else { return false }
+
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.message = "选择 SmartFocus 点击和鼠标轨迹记录 JSON"
+        panel.prompt = "选择 SmartFocus 记录"
+
+        guard panel.runModal() == .OK, let sourceURL = panel.url else { return false }
+        let hasAccess = sourceURL.startAccessingSecurityScopedResource()
+        defer {
+            if hasAccess {
+                sourceURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            let log = try assetStore.replaceSmartFocusLog(from: sourceURL, into: project.assetDirectoryName)
+            project.clickEvents = log.clicks.map { ClickEvent(time: $0.time, nx: $0.nx, ny: $0.ny) }
+            project.cursorSamples = log.samples.map {
+                CursorSample(time: $0.time, nx: $0.nx, ny: $0.ny, dragging: $0.dragging)
+            }
+            try assetStore.removeGeneratedOutputs(for: project.assetDirectoryName)
+            try context.save()
+            lastEventCount = project.clickEvents.count + project.cursorSamples.count
+            failureMessage = nil
+            statusMessage = "已更新 SmartFocus 记录"
+            return true
+        } catch {
+            failureMessage = "导入 SmartFocus 记录失败：\(error.localizedDescription)"
+            return false
+        }
     }
 
     func regenerateVideo(for project: Project, context: ModelContext) {
