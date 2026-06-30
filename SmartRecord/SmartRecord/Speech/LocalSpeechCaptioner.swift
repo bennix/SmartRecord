@@ -3,6 +3,7 @@ import Speech
 
 enum LocalSpeechCaptionerError: LocalizedError, Equatable {
     case noAudio
+    case speechPermissionDenied
     case onDeviceRecognitionUnavailable(String)
     case recognitionFailed(String)
 
@@ -10,6 +11,8 @@ enum LocalSpeechCaptionerError: LocalizedError, Equatable {
         switch self {
         case .noAudio:
             return "No recorded audio is available for local caption generation."
+        case .speechPermissionDenied:
+            return "Speech recognition permission is required to generate local captions."
         case .onDeviceRecognitionUnavailable(let language):
             return "On-device speech recognition is unavailable for \(language)."
         case .recognitionFailed(let detail):
@@ -61,6 +64,9 @@ nonisolated struct LocalSpeechCaptioner {
         guard let audioURL = Self.audioSource(bundle: bundle, audioMode: audioMode) else {
             throw LocalSpeechCaptionerError.noAudio
         }
+        guard await Self.requestSpeechAuthorization() else {
+            throw LocalSpeechCaptionerError.speechPermissionDenied
+        }
         let locale = Locale(identifier: language.identifier)
         guard let recognizer = recognizerFactory(locale), recognizer.supportsOnDeviceRecognition else {
             throw LocalSpeechCaptionerError.onDeviceRecognitionUnavailable(language.identifier)
@@ -94,6 +100,21 @@ nonisolated struct LocalSpeechCaptioner {
                     )
                 }
                 continuation.resume(returning: segments)
+            }
+        }
+    }
+
+    private static func requestSpeechAuthorization() async -> Bool {
+        let status = SFSpeechRecognizer.authorizationStatus()
+        if status == .authorized {
+            return true
+        }
+        guard status == .notDetermined else {
+            return false
+        }
+        return await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { nextStatus in
+                continuation.resume(returning: nextStatus == .authorized)
             }
         }
     }
