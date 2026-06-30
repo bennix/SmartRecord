@@ -35,6 +35,13 @@ struct RecordingEditorView: View {
     @State private var preparedTimeline: EditTimeline?
     @State private var isPreviewLoaded = false
 
+    init(project: Project, coordinator: RecordingCoordinator, onClose: (() -> Void)? = nil) {
+        self.project = project
+        self.coordinator = coordinator
+        self.onClose = onClose
+        _preparedTimeline = State(initialValue: project.ensureEditTimeline())
+    }
+
     private var bundle: ProjectAssetBundle? {
         coordinator.recordingBundle(for: project)
     }
@@ -44,18 +51,14 @@ struct RecordingEditorView: View {
             if let timeline = project.editTimeline ?? preparedTimeline {
                 editorBody(timeline)
             } else {
-                ProgressView("正在准备编辑器...")
-                    .controlSize(.large)
+                ContentUnavailableView("无法准备编辑数据", systemImage: "slider.horizontal.3")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
-            Task {
-                await Task.yield()
-                prepareTimelineIfNeeded()
-            }
+            loadPreviewVideoIfNeeded()
         }
         .onDisappear {
             player.pause()
@@ -145,13 +148,13 @@ struct RecordingEditorView: View {
                             Image(systemName: "play.rectangle.fill")
                                 .font(.system(size: 48, weight: .semibold))
                                 .foregroundStyle(.white.opacity(0.82))
-                            Text("视频预览未加载")
+                            Text("正在加载视频预览")
                                 .font(.title3.weight(.semibold))
                                 .foregroundStyle(.white)
                             Button {
                                 loadPreviewVideo()
                             } label: {
-                                Label("加载预览", systemImage: "play.fill")
+                                Label("重新加载预览", systemImage: "arrow.clockwise")
                             }
                             .buttonStyle(.borderedProminent)
                         }
@@ -161,7 +164,7 @@ struct RecordingEditorView: View {
                 }
 
             HStack(spacing: 10) {
-                Label(timeText(playhead), systemImage: "playhead")
+                Label(timeText(playhead), systemImage: "play.circle")
                     .monospacedDigit()
                 Slider(value: $playhead, in: 0...max(timeline.duration, 0.1)) {
                     Text("Playhead")
@@ -206,16 +209,16 @@ struct RecordingEditorView: View {
         .padding(14)
     }
 
-    private func prepareTimelineIfNeeded() {
-        let timeline = project.ensureEditTimeline()
-        preparedTimeline = timeline
-    }
-
     private func loadPreviewVideo() {
         guard let bundle else { return }
         let url = FileManager.default.fileExists(atPath: bundle.finalVideo.path) ? bundle.finalVideo : bundle.screenVideo
         player.replaceCurrentItem(with: AVPlayerItem(url: url))
         isPreviewLoaded = true
+    }
+
+    private func loadPreviewVideoIfNeeded() {
+        guard !isPreviewLoaded else { return }
+        loadPreviewVideo()
     }
 
     private func saveCopy() {

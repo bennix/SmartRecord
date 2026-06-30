@@ -641,6 +641,8 @@ struct ContentView: View {
     }
 
     private func edit(_ project: Project) {
+        _ = project.ensureEditTimeline()
+        try? context.save()
         editorProject = project
     }
 }
