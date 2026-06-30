@@ -11,7 +11,18 @@ import SwiftData
 @main
 struct SmartRecordApp: App {
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema([Project.self, ClickEvent.self, CursorSample.self, RenderSettings.self])
+        let schema = Schema([
+            Project.self,
+            ClickEvent.self,
+            CursorSample.self,
+            RenderSettings.self,
+            EditTimeline.self,
+            EditSegment.self,
+            AnnotationItem.self,
+            SmartFocusKeyframe.self,
+            CaptionSegment.self,
+            ExportSettings.self
+        ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
         do {

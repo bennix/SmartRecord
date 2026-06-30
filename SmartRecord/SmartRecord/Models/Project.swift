@@ -15,6 +15,7 @@ final class Project {
     @Relationship(deleteRule: .cascade) var clickEvents: [ClickEvent]
     @Relationship(deleteRule: .cascade) var cursorSamples: [CursorSample]
     @Relationship(deleteRule: .cascade) var settings: RenderSettings?
+    @Relationship(deleteRule: .cascade) var editTimeline: EditTimeline?
 
     init(
         createdAt: Date = .now,
@@ -37,6 +38,7 @@ final class Project {
         self.clickEvents = []
         self.cursorSamples = []
         self.settings = RenderSettings()
+        self.editTimeline = EditTimeline(sourceDuration: duration)
     }
 
     var status: ProjectStatus {

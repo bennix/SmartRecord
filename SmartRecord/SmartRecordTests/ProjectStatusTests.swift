@@ -83,4 +83,44 @@ struct ProjectStatusTests {
 
         #expect(project.frameRate == .default)
     }
+
+    @Test func projectCreatesDefaultEditTimeline() {
+        let project = Project(duration: 12, rawVideoFilename: "screen.mov")
+
+        #expect(project.editTimeline != nil)
+        #expect(project.editTimeline?.segments.count == 1)
+        #expect(project.editTimeline?.segments.first?.sourceStartTime == 0)
+        #expect(project.editTimeline?.segments.first?.sourceEndTime == 12)
+        #expect(project.editTimeline?.exportSettings?.burnCaptions == false)
+        #expect(project.editTimeline?.exportSettings?.includeAnnotations == true)
+        #expect(project.editTimeline?.exportSettings?.includeSmartFocus == true)
+    }
+
+    @Test func editTimelineStoresCaptionsAnnotationsAndFocusKeyframes() {
+        let project = Project(duration: 10, rawVideoFilename: "screen.mov")
+        let timeline = project.editTimeline!
+
+        timeline.annotations.append(
+            AnnotationItem(
+                kind: .text,
+                startTime: 1,
+                endTime: 4,
+                normalizedX: 0.2,
+                normalizedY: 0.3,
+                normalizedWidth: 0.4,
+                normalizedHeight: 0.1,
+                text: "Hello"
+            )
+        )
+        timeline.captions.append(
+            CaptionSegment(startTime: 1, endTime: 3, text: "Hello", languageCode: "en-US", confidence: 0.95)
+        )
+        timeline.smartFocusKeyframes.append(
+            SmartFocusKeyframe(time: 2, nx: 0.3, ny: 0.4, zoomScale: 1.8)
+        )
+
+        #expect(timeline.annotations.first?.kind == .text)
+        #expect(timeline.captions.first?.text == "Hello")
+        #expect(timeline.smartFocusKeyframes.first?.zoomScale == 1.8)
+    }
 }
