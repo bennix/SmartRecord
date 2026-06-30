@@ -6,7 +6,6 @@ struct ContentView: View {
     @Query(sort: \Project.createdAt, order: .reverse) private var projects: [Project]
     @State private var coordinator = RecordingCoordinator()
     @State private var editorProject: Project?
-    @State private var isEditorPresented = false
     @AppStorage(AppLanguageStore.userDefaultsKey) private var languageRawValue = AppLanguage.zhHans.rawValue
 
     private var language: AppLanguage {
@@ -18,27 +17,25 @@ struct ContentView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            sidebar
+        Group {
+            if let editorProject {
+                RecordingEditorView(project: editorProject, coordinator: coordinator) {
+                    self.editorProject = nil
+                }
+            } else {
+                HStack(spacing: 0) {
+                    sidebar
 
-            Divider()
+                    Divider()
 
-            mainContent
+                    mainContent
+                }
+            }
         }
         .frame(minWidth: 1240, minHeight: 760)
         .background(appBackground)
         .onChange(of: languageRawValue) { _, _ in
             coordinator.refreshLocalizedText()
-        }
-        .sheet(isPresented: $isEditorPresented, onDismiss: {
-            editorProject = nil
-        }) {
-            if let editorProject {
-                RecordingEditorView(project: editorProject, coordinator: coordinator)
-            } else {
-                ContentUnavailableView("无法打开编辑器", systemImage: "slider.horizontal.3")
-                    .frame(minWidth: 720, minHeight: 480)
-            }
         }
     }
 
@@ -645,7 +642,6 @@ struct ContentView: View {
 
     private func edit(_ project: Project) {
         editorProject = project
-        isEditorPresented = true
     }
 }
 

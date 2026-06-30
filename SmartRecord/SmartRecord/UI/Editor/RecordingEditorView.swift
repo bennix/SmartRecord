@@ -26,6 +26,7 @@ struct RecordingEditorView: View {
     @Environment(\.modelContext) private var context
     @Bindable var project: Project
     let coordinator: RecordingCoordinator
+    var onClose: (() -> Void)?
 
     @State private var mode: RecordingEditorMode = .cut
     @State private var playhead = 0.0
@@ -48,7 +49,7 @@ struct RecordingEditorView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .frame(minWidth: 1180, minHeight: 760)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
             Task {
@@ -74,6 +75,14 @@ struct RecordingEditorView: View {
 
     private var header: some View {
         HStack(spacing: 14) {
+            if let onClose {
+                Button(action: onClose) {
+                    Label("返回", systemImage: "chevron.left")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+            }
+
             VStack(alignment: .leading, spacing: 4) {
                 Text("SmartRecord 编辑器")
                     .font(.title.weight(.bold))
