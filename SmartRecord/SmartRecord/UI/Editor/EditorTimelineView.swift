@@ -1,12 +1,9 @@
 import SwiftUI
 
 struct EditorTimelineView: View {
-    @Bindable var project: Project
+    @Bindable var timeline: EditTimeline
+    let sourceDuration: Double
     @Binding var playhead: Double
-
-    private var timeline: EditTimeline {
-        project.ensureEditTimeline()
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -50,7 +47,7 @@ struct EditorTimelineView: View {
                             .monospacedDigit()
                             .frame(width: 150, alignment: .leading)
                         Stepper("开始 \(timeText(segment.sourceStartTime))", value: binding(for: segment, keyPath: \EditSegment.sourceStartTime), in: 0...max(segment.sourceEndTime, 0), step: 0.1)
-                        Stepper("结束 \(timeText(segment.sourceEndTime))", value: binding(for: segment, keyPath: \EditSegment.sourceEndTime), in: segment.sourceStartTime...max(project.duration, segment.sourceEndTime), step: 0.1)
+                        Stepper("结束 \(timeText(segment.sourceEndTime))", value: binding(for: segment, keyPath: \EditSegment.sourceEndTime), in: segment.sourceStartTime...max(sourceDuration, segment.sourceEndTime), step: 0.1)
                     }
                     .font(.body)
                 }

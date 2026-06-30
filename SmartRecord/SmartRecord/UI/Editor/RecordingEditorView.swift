@@ -31,28 +31,37 @@ struct RecordingEditorView: View {
     @State private var playhead = 0.0
     @State private var player = AVPlayer()
     @State private var captionLanguage = CaptionLanguage.defaults[0]
-
-    private var timeline: EditTimeline {
-        project.ensureEditTimeline()
-    }
+    @State private var preparedTimeline: EditTimeline?
 
     private var bundle: ProjectAssetBundle? {
         coordinator.recordingBundle(for: project)
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
-            content
-            Divider()
-            footer
+        Group {
+            if let timeline = project.editTimeline ?? preparedTimeline {
+                editorBody(timeline)
+            } else {
+                ProgressView("正在准备编辑器...")
+                    .controlSize(.large)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
         .frame(minWidth: 1180, minHeight: 760)
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
-            _ = project.ensureEditTimeline()
+            prepareTimelineIfNeeded()
             loadPreviewVideo()
+        }
+    }
+
+    private func editorBody(_ timeline: EditTimeline) -> some View {
+        VStack(spacing: 0) {
+            header
+            Divider()
+            content(timeline)
+            Divider()
+            footer(timeline)
         }
     }
 
@@ -83,11 +92,11 @@ struct RecordingEditorView: View {
         .padding(20)
     }
 
-    private var content: some View {
+    private func content(_ timeline: EditTimeline) -> some View {
         HStack(spacing: 0) {
             VStack(spacing: 14) {
-                preview
-                EditorTimelineView(project: project, playhead: $playhead)
+                preview(timeline)
+                EditorTimelineView(timeline: timeline, sourceDuration: project.duration, playhead: $playhead)
             }
             .frame(minWidth: 720)
             .padding(18)
@@ -96,6 +105,7 @@ struct RecordingEditorView: View {
 
             EditorInspectorView(
                 project: project,
+                timeline: timeline,
                 mode: mode,
                 playhead: $playhead,
                 captionLanguage: $captionLanguage,
@@ -105,7 +115,7 @@ struct RecordingEditorView: View {
         }
     }
 
-    private var preview: some View {
+    private func preview(_ timeline: EditTimeline) -> some View {
         ZStack(alignment: .bottomLeading) {
             RoundedRectangle(cornerRadius: 8)
                 .fill(Color.black)
@@ -140,7 +150,7 @@ struct RecordingEditorView: View {
         }
     }
 
-    private var footer: some View {
+    private func footer(_ timeline: EditTimeline) -> some View {
         HStack {
             Label("\(timeline.segments.filter(\.isEnabled).count) 段", systemImage: "rectangle.split.3x1")
             Label("\(timeline.annotations.count) 注释", systemImage: "pencil.and.outline")
@@ -160,6 +170,12 @@ struct RecordingEditorView: View {
         }
         .font(.body)
         .padding(14)
+    }
+
+    private func prepareTimelineIfNeeded() {
+        let timeline = project.ensureEditTimeline()
+        preparedTimeline = timeline
+        try? context.save()
     }
 
     private func loadPreviewVideo() {

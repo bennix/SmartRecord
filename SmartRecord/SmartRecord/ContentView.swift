@@ -438,9 +438,6 @@ struct ContentView: View {
                 .stroke(Color(nsColor: .separatorColor).opacity(0.35))
         )
         .contentShape(RoundedRectangle(cornerRadius: 8))
-        .onTapGesture {
-            coordinator.open(project: project)
-        }
         .contextMenu {
             Button { coordinator.open(project: project) } label: {
                 Label(t(.playRecording), systemImage: "play.rectangle")

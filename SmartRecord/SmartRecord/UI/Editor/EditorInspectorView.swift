@@ -4,14 +4,11 @@ import SwiftUI
 struct EditorInspectorView: View {
     @Environment(\.modelContext) private var context
     @Bindable var project: Project
+    @Bindable var timeline: EditTimeline
     let mode: RecordingEditorMode
     @Binding var playhead: Double
     @Binding var captionLanguage: CaptionLanguage
     let coordinator: RecordingCoordinator
-
-    private var timeline: EditTimeline {
-        project.ensureEditTimeline()
-    }
 
     var body: some View {
         ScrollView {
