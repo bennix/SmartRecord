@@ -38,19 +38,24 @@ struct EditorTimelineView: View {
             }
             .frame(height: 74)
 
-            List {
-                ForEach(TimelineMapper.normalizedSegments(from: timeline.segments)) { segment in
-                    HStack(spacing: 12) {
-                        Image(systemName: "film")
-                            .foregroundStyle(.blue)
-                        Text("\(timeText(segment.timelineStartTime)) - \(timeText(segment.timelineStartTime + segment.duration))")
-                            .monospacedDigit()
-                            .frame(width: 150, alignment: .leading)
-                        Stepper("开始 \(timeText(segment.sourceStartTime))", value: binding(for: segment, keyPath: \EditSegment.sourceStartTime), in: 0...max(segment.sourceEndTime, 0), step: 0.1)
-                        Stepper("结束 \(timeText(segment.sourceEndTime))", value: binding(for: segment, keyPath: \EditSegment.sourceEndTime), in: segment.sourceStartTime...max(sourceDuration, segment.sourceEndTime), step: 0.1)
+            ScrollView {
+                VStack(spacing: 10) {
+                    ForEach(TimelineMapper.normalizedSegments(from: timeline.segments)) { segment in
+                        HStack(spacing: 12) {
+                            Image(systemName: "film")
+                                .foregroundStyle(.blue)
+                            Text("\(timeText(segment.timelineStartTime)) - \(timeText(segment.timelineStartTime + segment.duration))")
+                                .monospacedDigit()
+                                .frame(width: 150, alignment: .leading)
+                            Stepper("开始 \(timeText(segment.sourceStartTime))", value: binding(for: segment, keyPath: \EditSegment.sourceStartTime), in: 0...max(segment.sourceEndTime, 0), step: 0.1)
+                            Stepper("结束 \(timeText(segment.sourceEndTime))", value: binding(for: segment, keyPath: \EditSegment.sourceEndTime), in: segment.sourceStartTime...max(sourceDuration, segment.sourceEndTime), step: 0.1)
+                        }
+                        .font(.body)
+                        .padding(10)
+                        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
                     }
-                    .font(.body)
                 }
+                .padding(.vertical, 2)
             }
             .frame(minHeight: 160)
         }

@@ -1,5 +1,5 @@
 import AppKit
-import AVKit
+import AVFoundation
 import SwiftData
 import SwiftUI
 
@@ -31,11 +31,9 @@ struct RecordingEditorView: View {
 
     @State private var mode: RecordingEditorMode = .cut
     @State private var playhead = 0.0
-    @State private var player = AVPlayer()
     @State private var captionLanguage = CaptionLanguage.defaults[0]
     @State private var preparedTimeline: EditTimeline?
     @State private var isPreviewLoaded = false
-    @State private var isPlayerVisible = false
     @State private var isPreviewFrameLoading = false
     @State private var previewImage: NSImage?
     @State private var previewErrorMessage: String?
@@ -66,10 +64,6 @@ struct RecordingEditorView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
             loadPreviewVideoIfNeeded()
-        }
-        .onDisappear {
-            player.pause()
-            player.replaceCurrentItem(with: nil)
         }
     }
 
@@ -155,9 +149,6 @@ struct RecordingEditorView: View {
                             description: Text(previewErrorMessage)
                         )
                         .foregroundStyle(.white)
-                    } else if isPlayerVisible {
-                        EditorPlayerView(player: player)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
                     } else if let previewImage {
                         Image(nsImage: previewImage)
                             .resizable()
@@ -166,8 +157,14 @@ struct RecordingEditorView: View {
                             .background(Color.black)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                     } else if isPreviewFrameLoading {
-                        EditorPlayerView(player: player)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        VStack(spacing: 12) {
+                            Image(systemName: "photo.on.rectangle.angled")
+                                .font(.system(size: 46, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.82))
+                            Text("正在读取视频画面")
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(.white)
+                        }
                     } else if bundle != nil {
                         VStack(spacing: 14) {
                             Image(systemName: "play.rectangle.fill")
@@ -198,14 +195,12 @@ struct RecordingEditorView: View {
                     if !isPreviewLoaded {
                         loadPreviewVideo()
                     }
-                    isPlayerVisible = true
-                    player.seek(to: CMTime(seconds: playhead, preferredTimescale: 600))
-                    player.play()
+                    coordinator.openOriginalRecording(for: project)
                 } label: {
                     Image(systemName: "play.fill")
                 }
                 .buttonStyle(.bordered)
-                .help("从当前位置播放")
+                .help("用系统播放器打开原始录屏")
             }
             .padding(10)
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
@@ -216,10 +211,9 @@ struct RecordingEditorView: View {
                     Image(systemName: "info.circle")
                     Text(previewNoticeMessage)
                     Button {
-                        isPlayerVisible = true
-                        player.play()
+                        coordinator.openOriginalRecording(for: project)
                     } label: {
-                        Label("直接播放", systemImage: "play.fill")
+                        Label("系统播放器打开", systemImage: "play.rectangle")
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
@@ -312,9 +306,6 @@ struct RecordingEditorView: View {
         }
         previewErrorMessage = nil
         previewNoticeMessage = nil
-        let item = AVPlayerItem(url: url)
-        player.replaceCurrentItem(with: item)
-        player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
         isPreviewLoaded = true
         loadPreviewFrame(from: url)
     }
@@ -334,18 +325,14 @@ struct RecordingEditorView: View {
                 previewErrorMessage = nil
                 previewNoticeMessage = nil
             } catch {
-                previewNoticeMessage = "首帧预览读取较慢，已切换为播放器预览。"
-                isPlayerVisible = true
+                previewNoticeMessage = "原始录屏存在，但应用内预览暂时无法读取画面；可用系统播放器打开。"
             }
             isPreviewFrameLoading = false
         }
     }
 
     private func resetPreview() {
-        player.pause()
-        player.replaceCurrentItem(with: nil)
         isPreviewLoaded = false
-        isPlayerVisible = false
         isPreviewFrameLoading = false
         previewImage = nil
         previewErrorMessage = nil
@@ -387,57 +374,51 @@ struct RecordingEditorView: View {
 
 private nonisolated enum EditorPreviewFrameLoader {
     static func image(from url: URL) async throws -> NSImage {
-        try await withThrowingTaskGroup(of: NSImage.self) { group in
+        let data = try await withThrowingTaskGroup(of: Data.self) { group in
             group.addTask {
-                try await generateImage(from: url)
+                try await generateImageData(from: url)
             }
             group.addTask {
                 try await Task.sleep(for: .seconds(2))
                 throw CocoaError(.userCancelled)
             }
 
-            guard let image = try await group.next() else {
+            guard let data = try await group.next() else {
                 throw CocoaError(.fileReadUnknown)
             }
             group.cancelAll()
-            return image
+            return data
         }
+
+        guard let image = NSImage(data: data) else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        return image
     }
 
-    private static func generateImage(from url: URL) async throws -> NSImage {
+    private static func generateImageData(from url: URL) async throws -> Data {
         let asset = AVURLAsset(url: url)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
         generator.maximumSize = CGSize(width: 1920, height: 1080)
 
         var lastError: Error?
-        for seconds in [0.0, 0.1, 0.5] {
+        for seconds in [0.5, 0.1, 1.0, 0.0] {
             do {
-                let result = try await generator.image(at: CMTime(seconds: seconds, preferredTimescale: 600))
-                return NSImage(cgImage: result.image, size: .zero)
+                var actualTime = CMTime.zero
+                let image = try generator.copyCGImage(
+                    at: CMTime(seconds: seconds, preferredTimescale: 600),
+                    actualTime: &actualTime
+                )
+                let bitmap = NSBitmapImageRep(cgImage: image)
+                if let data = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.86]) {
+                    return data
+                }
             } catch {
                 lastError = error
             }
         }
 
         throw lastError ?? CocoaError(.fileReadCorruptFile)
-    }
-}
-
-private struct EditorPlayerView: NSViewRepresentable {
-    let player: AVPlayer
-
-    func makeNSView(context: Context) -> AVPlayerView {
-        let view = AVPlayerView()
-        view.controlsStyle = .floating
-        view.showsFullScreenToggleButton = true
-        view.player = player
-        return view
-    }
-
-    func updateNSView(_ view: AVPlayerView, context: Context) {
-        if view.player !== player {
-            view.player = player
-        }
     }
 }
