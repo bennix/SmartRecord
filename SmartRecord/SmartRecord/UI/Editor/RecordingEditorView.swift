@@ -63,9 +63,6 @@ struct RecordingEditorView: View {
         .padding(.top, 44)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
-        .onAppear {
-            loadPreviewVideoIfNeeded()
-        }
     }
 
     private func editorBody(_ timeline: EditTimeline) -> some View {
@@ -171,13 +168,16 @@ struct RecordingEditorView: View {
                             Image(systemName: "play.rectangle.fill")
                                 .font(.system(size: 48, weight: .semibold))
                                 .foregroundStyle(.white.opacity(0.82))
-                            Text("正在加载视频预览")
+                            Text("原始录屏已就绪")
                                 .font(.title3.weight(.semibold))
                                 .foregroundStyle(.white)
+                            Text("点击生成静态预览图，或直接用系统播放器打开原始 screen.mov。")
+                                .font(.body)
+                                .foregroundStyle(.white.opacity(0.72))
                             Button {
                                 loadPreviewVideo()
                             } label: {
-                                Label("重新加载预览", systemImage: "arrow.clockwise")
+                                Label("生成预览图", systemImage: "photo")
                             }
                             .buttonStyle(.borderedProminent)
                         }
@@ -189,13 +189,9 @@ struct RecordingEditorView: View {
             HStack(spacing: 10) {
                 Label(timeText(playhead), systemImage: "play.circle")
                     .monospacedDigit()
-                Slider(value: $playhead, in: 0...max(timeline.duration, 0.1)) {
-                    Text("Playhead")
-                }
+                NonContinuousSlider(value: $playhead, range: 0...max(timeline.duration, 0.1))
+                    .frame(height: 24)
                 Button {
-                    if !isPreviewLoaded {
-                        loadPreviewVideo()
-                    }
                     coordinator.openOriginalRecording(for: project)
                 } label: {
                     Image(systemName: "play.fill")
@@ -245,7 +241,6 @@ struct RecordingEditorView: View {
                     guard didImport else { return }
                     preparedTimeline = project.ensureEditTimeline()
                     resetPreview()
-                    loadPreviewVideoIfNeeded()
                 }
             } label: {
                 Label("选择原始录屏", systemImage: "film.stack")
@@ -309,11 +304,6 @@ struct RecordingEditorView: View {
         previewNoticeMessage = nil
         isPreviewLoaded = true
         loadPreviewFrame(from: url)
-    }
-
-    private func loadPreviewVideoIfNeeded() {
-        guard !isPreviewLoaded || previewImage == nil else { return }
-        loadPreviewVideo()
     }
 
     private func loadPreviewFrame(from url: URL) {
@@ -415,5 +405,48 @@ private nonisolated enum EditorPreviewFrameLoader {
         }
 
         throw lastError ?? CocoaError(.fileReadCorruptFile)
+    }
+}
+
+private struct NonContinuousSlider: NSViewRepresentable {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(value: $value)
+    }
+
+    func makeNSView(context: Context) -> NSSlider {
+        let slider = NSSlider(
+            value: value,
+            minValue: range.lowerBound,
+            maxValue: range.upperBound,
+            target: context.coordinator,
+            action: #selector(Coordinator.valueChanged(_:))
+        )
+        slider.isContinuous = false
+        slider.controlSize = .large
+        return slider
+    }
+
+    func updateNSView(_ slider: NSSlider, context: Context) {
+        slider.minValue = range.lowerBound
+        slider.maxValue = range.upperBound
+        let clampedValue = min(max(value, range.lowerBound), range.upperBound)
+        if abs(slider.doubleValue - clampedValue) > 0.0001 {
+            slider.doubleValue = clampedValue
+        }
+    }
+
+    final class Coordinator: NSObject {
+        private var value: Binding<Double>
+
+        init(value: Binding<Double>) {
+            self.value = value
+        }
+
+        @objc func valueChanged(_ sender: NSSlider) {
+            value.wrappedValue = sender.doubleValue
+        }
     }
 }
