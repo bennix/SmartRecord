@@ -32,6 +32,7 @@ struct RecordingEditorView: View {
     @State private var player = AVPlayer()
     @State private var captionLanguage = CaptionLanguage.defaults[0]
     @State private var preparedTimeline: EditTimeline?
+    @State private var isPreviewLoaded = false
 
     private var bundle: ProjectAssetBundle? {
         coordinator.recordingBundle(for: project)
@@ -50,8 +51,14 @@ struct RecordingEditorView: View {
         .frame(minWidth: 1180, minHeight: 760)
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
-            prepareTimelineIfNeeded()
-            loadPreviewVideo()
+            Task {
+                await Task.yield()
+                prepareTimelineIfNeeded()
+            }
+        }
+        .onDisappear {
+            player.pause()
+            player.replaceCurrentItem(with: nil)
         }
     }
 
@@ -121,9 +128,24 @@ struct RecordingEditorView: View {
                 .fill(Color.black)
                 .aspectRatio(16 / 9, contentMode: .fit)
                 .overlay {
-                    if bundle != nil {
+                    if isPreviewLoaded {
                         VideoPlayer(player: player)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
+                    } else if bundle != nil {
+                        VStack(spacing: 14) {
+                            Image(systemName: "play.rectangle.fill")
+                                .font(.system(size: 48, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.82))
+                            Text("视频预览未加载")
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(.white)
+                            Button {
+                                loadPreviewVideo()
+                            } label: {
+                                Label("加载预览", systemImage: "play.fill")
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
                     } else {
                         ContentUnavailableView("找不到录制文件", systemImage: "film.stack")
                     }
@@ -136,6 +158,9 @@ struct RecordingEditorView: View {
                     Text("Playhead")
                 }
                 Button {
+                    if !isPreviewLoaded {
+                        loadPreviewVideo()
+                    }
                     player.seek(to: CMTime(seconds: playhead, preferredTimescale: 600))
                     player.play()
                 } label: {
@@ -175,13 +200,13 @@ struct RecordingEditorView: View {
     private func prepareTimelineIfNeeded() {
         let timeline = project.ensureEditTimeline()
         preparedTimeline = timeline
-        try? context.save()
     }
 
     private func loadPreviewVideo() {
         guard let bundle else { return }
         let url = FileManager.default.fileExists(atPath: bundle.finalVideo.path) ? bundle.finalVideo : bundle.screenVideo
         player.replaceCurrentItem(with: AVPlayerItem(url: url))
+        isPreviewLoaded = true
     }
 
     private func saveCopy() {

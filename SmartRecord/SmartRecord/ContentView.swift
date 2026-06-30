@@ -6,6 +6,7 @@ struct ContentView: View {
     @Query(sort: \Project.createdAt, order: .reverse) private var projects: [Project]
     @State private var coordinator = RecordingCoordinator()
     @State private var editorProject: Project?
+    @State private var isEditorPresented = false
     @AppStorage(AppLanguageStore.userDefaultsKey) private var languageRawValue = AppLanguage.zhHans.rawValue
 
     private var language: AppLanguage {
@@ -29,8 +30,15 @@ struct ContentView: View {
         .onChange(of: languageRawValue) { _, _ in
             coordinator.refreshLocalizedText()
         }
-        .sheet(item: $editorProject) { project in
-            RecordingEditorView(project: project, coordinator: coordinator)
+        .sheet(isPresented: $isEditorPresented, onDismiss: {
+            editorProject = nil
+        }) {
+            if let editorProject {
+                RecordingEditorView(project: editorProject, coordinator: coordinator)
+            } else {
+                ContentUnavailableView("无法打开编辑器", systemImage: "slider.horizontal.3")
+                    .frame(minWidth: 720, minHeight: 480)
+            }
         }
     }
 
@@ -398,8 +406,7 @@ struct ContentView: View {
                         coordinator.open(project: project)
                     }
                     rowAction("编辑", icon: "slider.horizontal.3") {
-                        _ = project.ensureEditTimeline()
-                        editorProject = project
+                        edit(project)
                     }
                     rowAction("Finder", icon: "folder") {
                         coordinator.reveal(project: project)
@@ -443,8 +450,7 @@ struct ContentView: View {
                 Label(t(.playRecording), systemImage: "play.rectangle")
             }
             Button {
-                _ = project.ensureEditTimeline()
-                editorProject = project
+                edit(project)
             } label: {
                 Label("编辑", systemImage: "slider.horizontal.3")
             }
@@ -635,6 +641,11 @@ struct ContentView: View {
         }
         context.delete(project)
         try? context.save()
+    }
+
+    private func edit(_ project: Project) {
+        editorProject = project
+        isEditorPresented = true
     }
 }
 
