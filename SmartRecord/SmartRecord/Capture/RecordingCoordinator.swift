@@ -15,16 +15,9 @@ final class RecordingCoordinator {
     var recordingStartedAt: Date?
     var selectedAudioMode: AudioCaptureMode = .both
     var selectedFrameRate: RecordingFrameRate = .default
-    var shouldGenerateSubtitles = true
-    var isDownloadingWhisperModel = false
-    var whisperModelDownloadProgress: Double?
-    var whisperModelInstalled = false
-    var whisperModelMessage = AppStrings.current(.checkingMediumModel)
-    var whisperModelPath: URL?
 
     private let assetStore: ProjectAssetStore
     private let postProcessor = PostProcessingCoordinator()
-    private let whisperModelManager = WhisperModelManager()
     private var activeBundle: ProjectAssetBundle?
     private var recorder: ScreenRecorder?
     private var tap: MouseEventTap?
@@ -34,11 +27,9 @@ final class RecordingCoordinator {
 
     init(assetStore: ProjectAssetStore = ProjectAssetStore()) {
         self.assetStore = assetStore
-        refreshWhisperModelStatus()
     }
 
     func refreshLocalizedText() {
-        refreshWhisperModelStatus()
         if isStarting {
             statusMessage = AppStrings.current(.preparingRecordingLong)
         } else if isRecording {
@@ -142,7 +133,6 @@ final class RecordingCoordinator {
             assetDirectoryName: result.bundle.directoryName,
             audioCaptureMode: selectedAudioMode,
             frameRate: result.frameRate,
-            generatesSubtitles: shouldGenerateSubtitles,
             status: .recorded
         )
         project.clickEvents = buffer.clicks.map { ClickEvent(time: $0.time, nx: $0.nx, ny: $0.ny) }
@@ -204,72 +194,6 @@ final class RecordingCoordinator {
         Task { @MainActor in
             await postProcessor.renderFinalVideo(project: project, context: context)
         }
-    }
-
-    func regenerateSubtitles(for project: Project, context: ModelContext) {
-        Task { @MainActor in
-            project.generatesSubtitles = true
-            await postProcessor.transcribeSubtitles(project: project, context: context)
-        }
-    }
-
-    func refreshWhisperModelStatus() {
-        if let model = whisperModelManager.installedModelURL() {
-            whisperModelInstalled = true
-            whisperModelPath = model
-            whisperModelMessage = AppStrings.current(.mediumModelReady)
-        } else {
-            whisperModelInstalled = false
-            whisperModelPath = nil
-            whisperModelMessage = AppStrings.current(.mediumModelNotInstalled)
-        }
-    }
-
-    func downloadWhisperMediumModel() {
-        guard !isDownloadingWhisperModel else { return }
-
-        isDownloadingWhisperModel = true
-        whisperModelDownloadProgress = nil
-        whisperModelMessage = AppStrings.current(.downloadingMediumModelLarge)
-        failureMessage = nil
-
-        Task { @MainActor in
-            do {
-                let url = try await whisperModelManager.downloadMediumModel { progress in
-                    Task { @MainActor in
-                        self.whisperModelDownloadProgress = progress
-                        if let progress {
-                            self.whisperModelMessage = AppStrings.current.downloadingMediumModelProgress(Int(progress * 100))
-                        } else {
-                            self.whisperModelMessage = AppStrings.current(.downloadingMediumModel)
-                        }
-                    }
-                }
-                whisperModelInstalled = true
-                whisperModelPath = url
-                whisperModelDownloadProgress = 1
-                whisperModelMessage = AppStrings.current(.mediumModelDownloaded)
-                statusMessage = AppStrings.current(.subtitleModelReady)
-            } catch {
-                whisperModelInstalled = false
-                whisperModelPath = nil
-                whisperModelDownloadProgress = nil
-                whisperModelMessage = AppStrings.current(.mediumModelDownloadFailed)
-                failureMessage = error.localizedDescription
-                statusMessage = AppStrings.current(.subtitleModelUnavailable)
-            }
-            isDownloadingWhisperModel = false
-        }
-    }
-
-    func revealWhisperModelFolder() {
-        let directory = whisperModelManager.modelDirectory
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        NSWorkspace.shared.activateFileViewerSelecting([directory])
-    }
-
-    func openWhisperModelDownloadPage() {
-        NSWorkspace.shared.open(WhisperModelManager.downloadURL)
     }
 
     func openScreenRecordingSettings() {

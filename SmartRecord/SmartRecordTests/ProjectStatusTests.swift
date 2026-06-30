@@ -83,10 +83,4 @@ struct ProjectStatusTests {
 
         #expect(project.frameRate == .default)
     }
-
-    @Test func projectStoresSubtitleGenerationPreference() {
-        let project = Project(rawVideoFilename: "legacy.mov", generatesSubtitles: false)
-
-        #expect(project.generatesSubtitles == false)
-    }
 }

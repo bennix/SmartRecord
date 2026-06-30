@@ -6,22 +6,17 @@ import SwiftData
 final class PostProcessingCoordinator {
     private let assetStore: ProjectAssetStore
     private let videoExporter: VideoExporter
-    private let whisperTranscriber: WhisperTranscriber
 
     init(
         assetStore: ProjectAssetStore = ProjectAssetStore(),
-        videoExporter: VideoExporter = VideoExporter(),
-        whisperTranscriber: WhisperTranscriber = WhisperTranscriber()
+        videoExporter: VideoExporter = VideoExporter()
     ) {
         self.assetStore = assetStore
         self.videoExporter = videoExporter
-        self.whisperTranscriber = whisperTranscriber
     }
 
     func process(project: Project, context: ModelContext) async {
         await renderFinalVideo(project: project, context: context)
-        guard project.status != .videoFailed else { return }
-        await transcribeSubtitles(project: project, context: context)
     }
 
     func renderFinalVideo(project: Project, context: ModelContext) async {
@@ -41,61 +36,10 @@ final class PostProcessingCoordinator {
                 audioMode: project.audioCaptureMode,
                 options: renderOptions(for: project)
             )
-            project.status = .recorded
+            project.status = .completed
             save(context)
         } catch {
             project.status = .videoFailed
-            save(context)
-        }
-    }
-
-    func transcribeSubtitles(project: Project, context: ModelContext) async {
-        let subtitleWarnings: Set<ProjectWarning> = [
-            .whisperCommandNotInstalled,
-            .missingSubtitleAudio,
-            .whisperMediumModelMissing,
-            .audioConverterNotInstalled
-        ]
-
-        guard let bundle = try? assetStore.bundle(named: project.assetDirectoryName) else {
-            project.status = .subtitleFailed
-            save(context)
-            return
-        }
-
-        guard project.generatesSubtitles, project.audioCaptureMode.capturesAudio else {
-            project.status = .completed
-            save(context)
-            return
-        }
-
-        project.removeWarnings(subtitleWarnings)
-        project.status = .transcribing
-        save(context)
-
-        do {
-            try await whisperTranscriber.transcribe(bundle: bundle, audioMode: project.audioCaptureMode)
-            project.removeWarnings(subtitleWarnings)
-            project.status = .completed
-            save(context)
-        } catch WhisperTranscriberError.missingCommand {
-            project.addWarning(.whisperCommandNotInstalled)
-            project.status = .subtitleFailed
-            save(context)
-        } catch WhisperTranscriberError.missingSubtitleAudio {
-            project.addWarning(.missingSubtitleAudio)
-            project.status = .subtitleFailed
-            save(context)
-        } catch WhisperTranscriberError.missingMediumModel {
-            project.addWarning(.whisperMediumModelMissing)
-            project.status = .subtitleFailed
-            save(context)
-        } catch WhisperTranscriberError.missingAudioConverter {
-            project.addWarning(.audioConverterNotInstalled)
-            project.status = .subtitleFailed
-            save(context)
-        } catch {
-            project.status = .subtitleFailed
             save(context)
         }
     }

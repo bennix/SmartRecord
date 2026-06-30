@@ -24,7 +24,6 @@ struct ProjectAssetStoreTests {
         #expect(bundle.microphoneAudio.lastPathComponent == "microphone.m4a")
         #expect(bundle.events.lastPathComponent == "events.json")
         #expect(bundle.finalVideo.lastPathComponent == "final.mp4")
-        #expect(bundle.finalVTT.lastPathComponent == "final.vtt")
     }
 
     @Test func removesOnlyGeneratedOutputs() throws {
@@ -36,13 +35,11 @@ struct ProjectAssetStoreTests {
         let bundle = try store.createProjectBundle()
         try Data("screen".utf8).write(to: bundle.screenVideo)
         try Data("video".utf8).write(to: bundle.finalVideo)
-        try Data("vtt".utf8).write(to: bundle.finalVTT)
 
         try store.removeGeneratedOutputs(for: bundle.directoryName)
 
         #expect(FileManager.default.fileExists(atPath: bundle.screenVideo.path))
         #expect(!FileManager.default.fileExists(atPath: bundle.finalVideo.path))
-        #expect(!FileManager.default.fileExists(atPath: bundle.finalVTT.path))
     }
 
     @Test func rejectsInvalidDirectoryNames() throws {

@@ -13,7 +13,6 @@ nonisolated struct ProjectAssetBundle: Equatable {
     var microphoneAudio: URL { directory.appendingPathComponent("microphone.m4a") }
     var events: URL { directory.appendingPathComponent("events.json") }
     var finalVideo: URL { directory.appendingPathComponent("final.mp4") }
-    var finalVTT: URL { directory.appendingPathComponent("final.vtt") }
 }
 
 nonisolated struct ProjectAssetStore {
@@ -39,7 +38,6 @@ nonisolated struct ProjectAssetStore {
     func removeGeneratedOutputs(for directoryName: String) throws {
         let bundle = try bundle(named: directoryName)
         try removeIfPresent(bundle.finalVideo)
-        try removeIfPresent(bundle.finalVTT)
     }
 
     func removeProject(named directoryName: String) throws {

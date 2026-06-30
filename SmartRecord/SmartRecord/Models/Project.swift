@@ -11,7 +11,6 @@ final class Project {
     var warningRawValues: String = ""
     var audioCaptureModeRawValue: String = AudioCaptureMode.both.rawValue
     var frameRateRawValue: Int = RecordingFrameRate.default.rawValue
-    var generatesSubtitles: Bool = true
 
     @Relationship(deleteRule: .cascade) var clickEvents: [ClickEvent]
     @Relationship(deleteRule: .cascade) var cursorSamples: [CursorSample]
@@ -24,7 +23,6 @@ final class Project {
         assetDirectoryName: String = "",
         audioCaptureMode: AudioCaptureMode = .both,
         frameRate: RecordingFrameRate = .default,
-        generatesSubtitles: Bool = true,
         status: ProjectStatus = .recorded,
         warnings: [ProjectWarning] = []
     ) {
@@ -34,7 +32,6 @@ final class Project {
         self.assetDirectoryName = assetDirectoryName
         self.audioCaptureModeRawValue = audioCaptureMode.rawValue
         self.frameRateRawValue = frameRate.rawValue
-        self.generatesSubtitles = generatesSubtitles
         self.statusRawValue = status.rawValue
         self.warningRawValues = Self.serializeWarnings(warnings)
         self.clickEvents = []

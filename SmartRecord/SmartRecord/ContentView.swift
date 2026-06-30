@@ -38,7 +38,7 @@ struct ContentView: View {
                         .font(.system(size: 34, weight: .bold, design: .rounded))
                         .lineLimit(1)
                         .minimumScaleFactor(0.9)
-                    Text(t(.appSubtitle))
+                    Text(t(.appTagline))
                         .font(.title3)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -55,7 +55,6 @@ struct ContentView: View {
 
                 recordPanel
                 captureHealthPanel
-                whisperPanel
 
                 if let lastProjectDirectory = coordinator.lastProjectDirectory, !coordinator.isRecording {
                     Button {
@@ -144,15 +143,6 @@ struct ContentView: View {
                 .opacity(coordinator.isRecording || coordinator.isStarting ? 0.62 : 1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-
-            Toggle(isOn: $coordinator.shouldGenerateSubtitles) {
-                Label(t(.generateVTTSubtitles), systemImage: "captions.bubble")
-                    .font(.body.weight(.semibold))
-            }
-            .toggleStyle(.switch)
-            .controlSize(.large)
-            .disabled(coordinator.isRecording || coordinator.isStarting || !coordinator.selectedAudioMode.capturesAudio)
-            .opacity(coordinator.isRecording || coordinator.isStarting || !coordinator.selectedAudioMode.capturesAudio ? 0.62 : 1)
 
             if let failureMessage = coordinator.failureMessage {
                 HStack(alignment: .top, spacing: 10) {
@@ -285,81 +275,6 @@ struct ContentView: View {
         .panelStyle()
     }
 
-    private var whisperPanel: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            panelTitle(t(.whisperSubtitles), icon: "captions.bubble")
-
-            healthRow(
-                title: t(.mediumModel),
-                detail: coordinator.whisperModelMessage,
-                icon: coordinator.whisperModelInstalled ? "checkmark.seal.fill" : "arrow.down.circle",
-                state: coordinator.whisperModelInstalled ? .ready : .warning
-            )
-
-            if let whisperModelPath = coordinator.whisperModelPath {
-                Text(whisperModelPath.path)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .truncationMode(.middle)
-                    .textSelection(.enabled)
-            }
-
-            if coordinator.isDownloadingWhisperModel {
-                VStack(alignment: .leading, spacing: 6) {
-                    if let progress = coordinator.whisperModelDownloadProgress {
-                        ProgressView(value: progress)
-                        Text("\(Int(progress * 100))%")
-                            .font(.body.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    } else {
-                        ProgressView()
-                        Text(t(.connectingDownloadSource))
-                            .font(.body.weight(.medium))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-
-            HStack(spacing: 8) {
-                Button {
-                    coordinator.downloadWhisperMediumModel()
-                } label: {
-                    Label(
-                        coordinator.isDownloadingWhisperModel ? t(.downloading) : t(.downloadMedium),
-                        systemImage: coordinator.isDownloadingWhisperModel ? "hourglass" : "arrow.down"
-                    )
-                    .font(.title3.weight(.medium))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .disabled(coordinator.isDownloadingWhisperModel || coordinator.whisperModelInstalled)
-
-                Button {
-                    coordinator.revealWhisperModelFolder()
-                } label: {
-                    Image(systemName: "folder")
-                        .frame(width: 24)
-                }
-                .buttonStyle(.bordered)
-                .help(t(.openModelFolder))
-
-                Button {
-                    coordinator.openWhisperModelDownloadPage()
-                } label: {
-                    Image(systemName: "safari")
-                        .frame(width: 24)
-                }
-                .buttonStyle(.bordered)
-                .help(t(.openModelDownloadPage))
-            }
-        }
-        .panelStyle()
-    }
-
     private var mainContent: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .lastTextBaseline) {
@@ -422,10 +337,7 @@ struct ContentView: View {
         if let started = coordinator.recordingStartedAt {
             return t.startedAt(started.formatted(date: .omitted, time: .shortened))
         }
-        let subtitle = coordinator.shouldGenerateSubtitles && coordinator.selectedAudioMode.capturesAudio
-            ? "VTT"
-            : t(.noSubtitles)
-        return "\(t.frameRateLabel(coordinator.selectedFrameRate)) / H.264 MP4 / \(subtitle)"
+        return "\(t.frameRateLabel(coordinator.selectedFrameRate)) / H.264 MP4"
     }
 
     private var appBackground: some ShapeStyle {
@@ -441,10 +353,7 @@ struct ContentView: View {
 
     private func projectRow(_ project: Project) -> some View {
         let assets = projectAssets(project)
-        let expectsSubtitles = project.generatesSubtitles && project.audioCaptureMode.capturesAudio
-        let visibleWarnings = project.warnings.filter { warning in
-            warning != .audioConverterNotInstalled || !WhisperTranscriber().hasAudioConverter()
-        }
+        let visibleWarnings = project.warnings
 
         return VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 16) {
@@ -472,11 +381,6 @@ struct ContentView: View {
                         tag(t.frameRateLabel(project.frameRate), icon: "speedometer", tint: .indigo)
                         tag(assets.hasFinalVideo ? "H.264 MP4" : t(.waitingMP4), icon: "video", tint: assets.hasFinalVideo ? .green : .secondary)
                         tag(
-                            assets.hasFinalVTT ? "VTT medium" : expectsSubtitles ? t(.waitingVTT) : t(.skipVTT),
-                            icon: "captions.bubble",
-                            tint: assets.hasFinalVTT ? .green : expectsSubtitles ? .secondary : .orange
-                        )
-                        tag(
                             project.clickEvents.isEmpty ? "SmartFocus \(project.cursorSamples.count)" : "SmartFocus \(project.clickEvents.count)",
                             icon: "cursorarrow.click",
                             tint: project.clickEvents.isEmpty && project.cursorSamples.isEmpty ? .orange : .blue
@@ -495,9 +399,6 @@ struct ContentView: View {
                     rowAction(t(.video), icon: "arrow.triangle.2.circlepath") {
                         coordinator.regenerateVideo(for: project, context: context)
                     }
-                    rowAction(t(.subtitles), icon: "captions.bubble") {
-                        coordinator.regenerateSubtitles(for: project, context: context)
-                    }
                     rowAction(t(.delete), icon: "trash", role: .destructive) {
                         delete(project)
                     }
@@ -509,7 +410,6 @@ struct ContentView: View {
                 assetBadge("system.m4a", ready: assets.hasSystemAudio, expected: project.audioCaptureMode.capturesSystemAudio)
                 assetBadge("microphone.m4a", ready: assets.hasMicrophoneAudio, expected: project.audioCaptureMode.capturesMicrophone)
                 assetBadge("final.mp4", ready: assets.hasFinalVideo)
-                assetBadge("final.vtt", ready: assets.hasFinalVTT, expected: expectsSubtitles)
             }
 
             if !visibleWarnings.isEmpty {
@@ -539,9 +439,6 @@ struct ContentView: View {
             }
             Button { coordinator.regenerateVideo(for: project, context: context) } label: {
                 Label(t(.regenerateVideo), systemImage: "arrow.triangle.2.circlepath")
-            }
-            Button { coordinator.regenerateSubtitles(for: project, context: context) } label: {
-                Label(t(.regenerateSubtitles), systemImage: "captions.bubble")
             }
             Button { coordinator.reveal(project: project) } label: {
                 Label(t(.showInFinder), systemImage: "folder")
@@ -656,16 +553,14 @@ struct ContentView: View {
                 hasScreenVideo: false,
                 hasSystemAudio: false,
                 hasMicrophoneAudio: false,
-                hasFinalVideo: false,
-                hasFinalVTT: false
+                hasFinalVideo: false
             )
         }
         return ProjectAssetPresence(
             hasScreenVideo: FileManager.default.fileExists(atPath: bundle.screenVideo.path),
             hasSystemAudio: FileManager.default.fileExists(atPath: bundle.systemAudio.path),
             hasMicrophoneAudio: FileManager.default.fileExists(atPath: bundle.microphoneAudio.path),
-            hasFinalVideo: FileManager.default.fileExists(atPath: bundle.finalVideo.path),
-            hasFinalVTT: FileManager.default.fileExists(atPath: bundle.finalVTT.path)
+            hasFinalVideo: FileManager.default.fileExists(atPath: bundle.finalVideo.path)
         )
     }
 
@@ -677,14 +572,10 @@ struct ContentView: View {
             return t(.saved)
         case .renderingVideo:
             return t(.renderingVideo)
-        case .transcribing:
-            return t(.transcribing)
         case .completed:
             return t(.completed)
         case .videoFailed:
             return t(.videoFailed)
-        case .subtitleFailed:
-            return t(.subtitleFailed)
         }
     }
 
@@ -696,11 +587,9 @@ struct ContentView: View {
             return "tray.and.arrow.down"
         case .renderingVideo:
             return "film"
-        case .transcribing:
-            return "captions.bubble"
         case .completed:
             return "checkmark.circle"
-        case .videoFailed, .subtitleFailed:
+        case .videoFailed:
             return "exclamationmark.triangle"
         }
     }
@@ -709,9 +598,9 @@ struct ContentView: View {
         switch status {
         case .completed:
             return .green
-        case .renderingVideo, .transcribing:
+        case .renderingVideo:
             return .blue
-        case .videoFailed, .subtitleFailed:
+        case .videoFailed:
             return .red
         case .recording:
             return .red
@@ -726,14 +615,6 @@ struct ContentView: View {
             return t(.missingMicrophoneAudio)
         case .missingSystemAudio:
             return t(.missingSystemAudio)
-        case .missingSubtitleAudio:
-            return t(.missingSubtitleAudio)
-        case .whisperCommandNotInstalled:
-            return t(.whisperCommandNotInstalled)
-        case .whisperMediumModelMissing:
-            return t(.whisperMediumModelMissing)
-        case .audioConverterNotInstalled:
-            return t(.audioConverterNotInstalled)
         }
     }
 
@@ -841,5 +722,4 @@ private struct ProjectAssetPresence {
     let hasSystemAudio: Bool
     let hasMicrophoneAudio: Bool
     let hasFinalVideo: Bool
-    let hasFinalVTT: Bool
 }
